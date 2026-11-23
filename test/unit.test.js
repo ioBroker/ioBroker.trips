@@ -491,3 +491,275 @@ describe('exports and statistics', () => {
         assert.strictEqual(formatAddress({ error: 'Unable to geocode' }), null);
     });
 });
+
+describe('boat: sailing and motoring', () => {
+    const { ConsumptionMeter } = require('../build/lib/meter');
+
+    it('counts the distance with the engine on, the rest was sailed', () => {
+        const { detector, trips } = makeDetector('boat');
+        // 1 nm out of the harbour with the engine, 3 nm under sail, 1 nm back in with the engine
+        const t = track(
+            [
+                { stand: 120 },
+                { drive: 1852, speed: 11 },
+                { drive: 5556, speed: 11 },
+                { drive: 1852, speed: 11 },
+                { stand: 60 },
+            ],
+            { jitter: 3 },
+        );
+        const events = [
+            { ts: t.marks[1].from - 30000, on: true },
+            { ts: t.marks[2].from, on: false },
+            { ts: t.marks[3].from, on: true },
+            { ts: t.marks[4].from + 30000, on: false },
+        ];
+        detector.setIgnition(false, t.fixes[0].ts, t.fixes[0].ts);
+        let now = 0;
+        for (const fix of t.fixes) {
+            while (events.length && events[0].ts <= fix.ts) {
+                const e = events.shift();
+                detector.setIgnition(e.on, e.ts, fix.ts);
+            }
+            now = fix.ts;
+            detector.processFix(fix, now);
+            detector.tick(now);
+        }
+        for (let i = 0; i < 400; i++) {
+            now += 5000;
+            detector.tick(now);
+        }
+        assert.strictEqual(trips.length, 1);
+        const trip = trips[0];
+        assert.ok(trip.engineKnown);
+        assert.ok(Math.abs(trip.distance - 9260) < 400, `distance ${trip.distance}`);
+        assert.ok(Math.abs(trip.engineDistance - 3704) < 300, `engine ${trip.engineDistance}`);
+    });
+
+    it('the engine state unknown: nothing about sailing', () => {
+        const { detector, trips } = makeDetector('boat');
+        const t = track([{ stand: 60 }, { drive: 3000, speed: 11 }, { stand: 60 }]);
+        run(detector, t.fixes);
+        assert.strictEqual(trips.length, 1);
+        assert.strictEqual(trips[0].engineKnown, false);
+        assert.strictEqual(trips[0].engineDistance, 0);
+    });
+
+    it('aggregates the share under sail', () => {
+        const stats = aggregate(
+            [
+                { start: 1, distance: 10000, sailDistance: 6000, duration: 0, movingTime: 0, maxSpeed: 0 },
+                { start: 2, distance: 5000, duration: 0, movingTime: 0, maxSpeed: 0 },
+                { start: 3, distance: 10000, sailDistance: 9000, duration: 0, movingTime: 0, maxSpeed: 0 },
+            ],
+            0,
+        );
+        assert.strictEqual(stats.sailDistance, 15000);
+        assert.strictEqual(stats.sailBase, 20000);
+    });
+
+    it('meter: counter difference, reset of the counter', () => {
+        const meter = new ConsumptionMeter('counter');
+        meter.update(1000, 1);
+        meter.start(2);
+        meter.update(1002.5, 3);
+        meter.update(3, 4); // counter reset
+        meter.update(4, 5);
+        assert.ok(Math.abs(meter.stop(6) - 3.5) < 1e-9);
+        meter.update(10, 7); // outside a trip
+        meter.start(8);
+        meter.update(11, 9);
+        assert.ok(Math.abs(meter.stop(10) - 1) < 1e-9);
+    });
+
+    it('meter: level in % with refuelling and recuperation', () => {
+        const meter = new ConsumptionMeter('level', { percent: true, capacity: 60 });
+        meter.update(80, 1);
+        meter.start(2);
+        meter.update(78, 3);
+        meter.update(78.5, 4); // recuperation: subtracted again
+        meter.update(75, 5);
+        meter.update(95, 6); // charging/refuelling: skipped
+        meter.update(90, 7);
+        // (80 - 75) + (95 - 90) = 10 % of 60 = 6
+        assert.ok(Math.abs(meter.stop(8) - 6) < 1e-9);
+    });
+
+    it('meter: the start detected later, the end decided later', () => {
+        // counter +1 per second; the trip runs from 4.5 s to 15.5 s, but is known only at 10 s and ends at 20 s
+        const meter = new ConsumptionMeter('counter');
+        for (let i = 0; i <= 10; i++) {
+            meter.update(100 + i, i * 1000);
+        }
+        meter.start(4500);
+        assert.strictEqual(meter.current(10000), 6, 'counted from the value at the start');
+        for (let i = 11; i <= 20; i++) {
+            meter.update(100 + i, i * 1000);
+        }
+        assert.strictEqual(meter.stop(15500), 11, 'from 104 to 115, not to 120');
+
+        // the same for the flow: 3600 l/h = 1 l/s
+        const rate = new ConsumptionMeter('rate');
+        for (let i = 0; i <= 10; i++) {
+            rate.update(3600, i * 1000);
+        }
+        rate.start(4500);
+        for (let i = 11; i <= 20; i++) {
+            rate.update(3600, i * 1000);
+        }
+        assert.ok(Math.abs(rate.stop(15500) - 11) < 1e-9);
+    });
+
+    it('meter: no value between the start and the end', () => {
+        const meter = new ConsumptionMeter('counter');
+        meter.update(50, 0);
+        meter.start(1000);
+        meter.update(55, 9000);
+        assert.strictEqual(meter.stop(5000), 0);
+        meter.start(10000);
+        meter.update(57, 11000);
+        assert.strictEqual(meter.stop(12000), 2, 'the next trip starts at the last value');
+    });
+
+    it('meter: rate integrated over the trip, long gaps capped', () => {
+        const meter = new ConsumptionMeter('rate', { maxGapSeconds: 300 });
+        meter.update(10, 0); // 10 l/h before the trip: not counted
+        const start = 3600000;
+        meter.start(start);
+        // 30 min at 12 l/h, a value every minute = 6 l
+        for (let i = 0; i <= 30; i++) {
+            meter.update(12, start + i * 60000);
+        }
+        // then no value for 1 h: only 5 min count = 1 l
+        meter.update(0, start + 30 * 60000 + 3600000);
+        const used = meter.stop(start + 3 * 3600000);
+        assert.ok(Math.abs(used - 7) < 1e-6, `used ${used}`);
+    });
+});
+
+describe('anchor watch', () => {
+    const { PositionWatch } = require('../build/lib/watch');
+    const at = (meters, ts) => ({ ts, lat: LAT, lon: LON + meters / M_PER_DEG_LON });
+
+    it('alarm after three positions outside, not for one outlier', () => {
+        const watch = new PositionWatch({ confirmFixes: 3, signalLostSeconds: 300 }, 50);
+        watch.activate(LAT, LON, 0);
+        assert.strictEqual(watch.onFix(at(30, 1000), 1000), null);
+        assert.strictEqual(watch.onFix(at(200, 2000), 2000), null, 'one outlier');
+        assert.strictEqual(watch.onFix(at(35, 3000), 3000), null);
+        assert.strictEqual(watch.state.maxDistance, 35, 'the outlier does not grow the swing circle');
+        watch.onFix(at(60, 4000), 4000);
+        watch.onFix(at(65, 5000), 5000);
+        assert.strictEqual(watch.onFix(at(70, 6000), 6000), 'alarm');
+        assert.strictEqual(watch.state.alarm, true);
+        assert.strictEqual(watch.onFix(at(75, 7000), 7000), null, 'only once');
+        watch.acknowledge();
+        watch.onFix(at(80, 8000), 8000);
+        watch.onFix(at(80, 9000), 9000);
+        assert.strictEqual(watch.onFix(at(80, 10000), 10000), 'alarm', 'again after the acknowledgement');
+    });
+
+    it('alarm when the positions stop, and when they come back', () => {
+        const watch = new PositionWatch({ confirmFixes: 3, signalLostSeconds: 300 }, 50);
+        watch.activate(LAT, LON, 0);
+        watch.onFix(at(10, 1000), 1000);
+        assert.strictEqual(watch.tick(200000), null);
+        assert.strictEqual(watch.tick(302000), 'signalLost');
+        assert.strictEqual(watch.tick(400000), null, 'only once');
+        assert.strictEqual(watch.onFix(at(10, 500000), 500000), 'signalBack');
+    });
+
+    it('restores an active watch and ignores one without position', () => {
+        const watch = new PositionWatch({ confirmFixes: 3, signalLostSeconds: 0 }, 50, {
+            active: true,
+            lat: LAT,
+            lon: LON,
+            radius: 80,
+        });
+        assert.strictEqual(watch.state.active, true);
+        assert.strictEqual(watch.state.radius, 80);
+        assert.strictEqual(watch.tick(1e12), null, 'signal check off');
+        const broken = new PositionWatch({ confirmFixes: 3, signalLostSeconds: 0 }, 50, { active: true, lat: null });
+        assert.strictEqual(broken.state.active, false);
+    });
+});
+
+describe('logbook', () => {
+    const { applyChanges, logbookCsv, changesCsv } = require('../build/lib/logbook');
+    const { text } = require('../build/lib/texts');
+    const at = (h, m) => new Date(2026, 10, 23, h, m).getTime();
+    const trip = () => ({
+        id: '20261123-080000',
+        start: at(8, 0),
+        end: at(8, 45),
+        distance: 42100,
+        from: 'Home',
+        to: 'Office; Kiel',
+        stops: [{ start: at(8, 10), end: at(8, 20), lat: null, lon: null, place: 'Bakery' }],
+        odometerStart: 12000,
+        odometerEnd: 12042.1,
+    });
+
+    it('records every change', () => {
+        const summary = trip();
+        const changes = applyChanges(
+            summary,
+            { category: 'Business', purpose: ' Customer visit ', partner: '' },
+            5,
+            'admin.0',
+        );
+        assert.strictEqual(summary.category, 'business');
+        assert.strictEqual(summary.purpose, 'Customer visit');
+        assert.strictEqual(changes.length, 2, 'the empty partner was empty before');
+        assert.deepStrictEqual(changes[0], {
+            ts: 5,
+            id: summary.id,
+            field: 'category',
+            old: null,
+            new: 'business',
+            source: 'admin.0',
+        });
+        assert.strictEqual(summary.changes, 2);
+        assert.strictEqual(applyChanges(summary, { category: 'business' }, 6, 'x').length, 0, 'no change');
+        const cleared = applyChanges(summary, { purpose: null }, 7, 'x');
+        assert.strictEqual(cleared[0].old, 'Customer visit');
+        assert.strictEqual(summary.purpose, undefined);
+        assert.throws(() => applyChanges(summary, { category: 'holiday' }, 8, 'x'), /Invalid category/);
+    });
+
+    it('exports the logbook as CSV', () => {
+        const summary = trip();
+        applyChanges(summary, { category: 'business', partner: 'ACME "North"' }, 5, 'x');
+        const csv = logbookCsv([summary], {
+            lang: 'de',
+            meters: 1000,
+            unit: 'km',
+            formatNumber: (v, d) => v.toFixed(d).replace('.', ','),
+        });
+        assert.strictEqual(csv.charCodeAt(0), 0xfeff, 'BOM for Excel');
+        const lines = csv.substring(1).trim().split('\r\n');
+        assert.strictEqual(lines.length, 2);
+        assert.ok(lines[0].startsWith('Datum;Abfahrt;Ankunft;Km-Stand Beginn (km)'), lines[0]);
+        const fields = lines[1].split(';');
+        assert.strictEqual(fields[3], '12000');
+        assert.strictEqual(fields[5], '42,1');
+        assert.ok(lines[1].includes('"Office; Kiel"'), 'quoted');
+        assert.ok(lines[1].includes('Bakery (08:10-08:20)'), lines[1]);
+        assert.ok(lines[1].includes(';geschäftlich;'), lines[1]);
+        assert.ok(lines[1].includes('"ACME ""North"""'), lines[1]);
+        const changes = changesCsv(
+            [{ ts: 5, id: summary.id, field: 'category', old: null, new: 'business', source: 'x' }],
+            'en',
+        );
+        assert.ok(changes.includes(';Category;;business;x'), changes);
+    });
+
+    it('texts with placeholders and fallback to English', () => {
+        assert.strictEqual(
+            text('de', 'alarmText', { distance: 63, radius: 50 }),
+            '63 m von der Wachposition entfernt (Radius 50 m)',
+        );
+        assert.strictEqual(text('xx', 'anchorAlarm'), 'Anchor alarm');
+        assert.strictEqual(text('en', 'unknownKey'), 'unknownKey');
+    });
+});

@@ -1,6 +1,7 @@
 import type { DistanceUnit, ObjectType, SpeedUnit, TrackedObjectConfig } from '../types';
 import { SPEED_UNIT_OF, toMs } from './geo';
 import type { DetectorSettings } from './tripDetector';
+import type { WatchSettings } from './watch';
 
 interface TypeDefaults {
     unit: DistanceUnit;
@@ -16,6 +17,10 @@ interface TypeDefaults {
     /** in the speed unit of `unit` */
     maxSpeed: number;
     ignition: boolean;
+    /** Meters of the anchor/position watch */
+    watchRadius: number;
+    /** Minutes without positions that are an alarm of the watch */
+    watchSignalMinutes: number;
 }
 
 /**
@@ -35,6 +40,8 @@ export const TYPE_DEFAULTS: Record<ObjectType, TypeDefaults> = {
         maxAccuracy: 50,
         maxSpeed: 300,
         ignition: true,
+        watchRadius: 100,
+        watchSignalMinutes: 30,
     },
     boat: {
         unit: 'nm',
@@ -48,6 +55,8 @@ export const TYPE_DEFAULTS: Record<ObjectType, TypeDefaults> = {
         maxAccuracy: 50,
         maxSpeed: 60,
         ignition: false,
+        watchRadius: 50,
+        watchSignalMinutes: 5,
     },
     person: {
         unit: 'km',
@@ -61,6 +70,8 @@ export const TYPE_DEFAULTS: Record<ObjectType, TypeDefaults> = {
         maxAccuracy: 100,
         maxSpeed: 1000,
         ignition: false,
+        watchRadius: 200,
+        watchSignalMinutes: 60,
     },
     other: {
         unit: 'km',
@@ -74,6 +85,8 @@ export const TYPE_DEFAULTS: Record<ObjectType, TypeDefaults> = {
         maxAccuracy: 50,
         maxSpeed: 300,
         ignition: false,
+        watchRadius: 100,
+        watchSignalMinutes: 30,
     },
 };
 
@@ -100,6 +113,7 @@ export interface ObjectSettings {
     unit: DistanceUnit;
     speedUnit: SpeedUnit;
     detector: DetectorSettings;
+    watch: WatchSettings & { radius: number };
 }
 
 export function objectSettings(config: TrackedObjectConfig): ObjectSettings {
@@ -140,6 +154,11 @@ export function objectSettings(config: TrackedObjectConfig): ObjectSettings {
             useIgnition: type === 'car' && config.useIgnition !== false,
             ignitionOffSeconds: 120,
             maxGapSeconds: Math.max(3600, tripEndMinutes * 60),
+        },
+        watch: {
+            radius: Math.max(5, configNumber(config.watchRadius, d.watchRadius)),
+            confirmFixes: 3,
+            signalLostSeconds: Math.max(0, configNumber(config.watchSignalMinutes, d.watchSignalMinutes)) * 60,
         },
     };
 }

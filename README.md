@@ -13,7 +13,8 @@
 Turns GPS positions into trips: for a car, a boat or a person. The adapter takes the positions from one or more
 sources, filters the GPS jitter and outliers, detects the start and the end of each trip and calculates distance,
 duration, speeds, stops, consumption and costs. Every trip is stored as GeoJSON and GPX, and a summary can be sent
-to a messenger after each trip.
+to a messenger after each trip. On top: a logbook with category, purpose and change log, the share under sail for
+boats, and an anchor watch that also works as a theft watch for cars.
 
 ## How it works
 
@@ -64,9 +65,24 @@ The stop radius of a boat is larger, so that swinging at anchor does not start a
 
 ## Consumption
 
+Estimated from a constant:
+
 - **Per 100 distance units**: e.g. 6.5 l/100 km or 18 kWh/100 km.
 - **Per engine hour**: e.g. 2.5 l/h for a boat. The engine time comes from the ignition/engine state (NMEA: RPM > 0),
   without it the moving time is used.
+
+Measured from a state of the vehicle:
+
+- **Counter**: a total that only grows, e.g. the fuel used of the engine or an energy meter. The trip gets the
+  difference. A counter that was reset continues from the new value.
+- **Level**: the tank level or the battery SoC, in % (with the capacity) or in liters/kWh. Small rises (recuperation,
+  sloshing fuel) are subtracted again, a rise of 5 % of the capacity or more is a refuelling or charging and is
+  skipped.
+- **Flow**: fuel flow in l/h (e.g. `nmea.0.engineParametersDynamic.fuelRate`) or power in kW, integrated over the
+  trip. Without values for more than 5 minutes only 5 minutes count.
+
+The state should be updated while driving. Values that come only after the trip has ended (some cloud adapters of
+car makers) count for the next trip.
 
 The price is fixed or comes from a state (e.g. `tankerkoenig`, `tibber`). CO₂ is calculated with 2.37 kg/l (petrol),
 0.38 kg/kWh or the value from the settings.
@@ -85,7 +101,7 @@ For every object `trips.0.<name>`:
 | `live.place`                      | name of the place the object is in                             |
 | `live.distanceHome`               | distance to the home place                                     |
 | `live.source`, `live.ignition`    | used source, ignition/engine                                   |
-| `live.consumption`                | estimated consumption of the running trip                      |
+| `live.consumption`                | consumption of the running trip (estimated or measured)        |
 | `lastTrip.*`                      | start, end, from, to, distance, duration, moving time, speeds, stops, elevation gain, consumption, cost, CO₂ |
 | `lastTrip.summary`                | text like `Car: Home → Office, 42.1 km, 0:51 h, 3.1 l, 5.80 €` |
 | `lastTrip.json`                   | the whole summary as JSON                                      |
@@ -93,8 +109,56 @@ For every object `trips.0.<name>`:
 | `stats.today/week/month/year/total.*` | distance, trips, duration (h), moving time (h), engine hours, longest trip, max. speed, consumption, cost, CO₂ |
 | `control.manualTrip`              | start (`true`) and end (`false`) a trip by hand                |
 | `control.endTrip`                 | end the running trip now                                       |
+| `lastTrip.sailDistance`, `.sailShare`, `stats.*.sailDistance`, `.sailShare` | boats: distance and share under sail |
+| `watch.*`                         | anchor/position watch, see below                               |
+| `control.category`, `.purpose`, `.partner`, `.driver` | logbook: for the running or the next trip, see below |
+| `lastTrip.category`, `.purpose`, `.partner`, `.driver` | logbook: writable, changes the last trip (recorded) |
+| `logbook.csv`, `logbook.changes`  | paths of the logbook of this year and its changes as CSV        |
 
 A trip belongs to the period in which it started. Weeks start on Monday.
+
+## Boats: sailing and motoring
+
+With an engine state in the source (NMEA: the engine RPM is used automatically, or any state that is > 0 or `true`
+while the engine runs), the distance with the engine on is counted. The rest was sailed:
+`lastTrip.sailDistance` and `lastTrip.sailShare` (%), and per period `stats.*.sailDistance` and `stats.*.sailShare`.
+Trips without a known engine state are not part of the share.
+
+## Anchor watch and position watch
+
+`watch.active = true` takes the last position as the center of a circle with the radius `watch.radius`
+(default: boat 50 m, car 100 m). The alarm `watch.alarm` comes when three positions in a row are outside of the
+circle, so one GPS outlier gives no alarm. Writing `false` to `watch.alarm` acknowledges it; if the object stays
+outside, the alarm comes again. `watch.signalLost` is set when no position came for the configured minutes
+(default: boat 5, car 30, person 60).
+
+- `watch.latitude`/`.longitude` can be corrected by hand, e.g. to the real position of the anchor ahead of the boat.
+- `watch.distance` is the current distance from the center, `watch.maxDistance` the swing circle: the farthest
+  position, without single outliers.
+- **Boats** never end the watch by themselves, also not when the engine runs (charging at anchor). Switch it off by
+  hand.
+- **Cars**: the ignition ends the watch. A car that is moved without the ignition (towed away) gives the alarm.
+- `Start the watch at the end of each trip` switches it on automatically at the place where the trip ended.
+- The alarms go to the messenger of the notifications (can be switched off per object).
+
+## Logbook
+
+With `Keep a logbook` each trip gets a category (`private`, `business`, `commute`), a purpose, a business partner and
+a driver:
+
+- Before or during the trip: `control.category`, `control.purpose`, `control.partner`, `control.driver`. Purpose and
+  partner belong to one trip and are cleared after it, the category goes back to the default of the object, the
+  driver stays.
+- After the trip: write `lastTrip.category`, `.purpose`, `.partner` or `.driver`, or send `updateTrip` for any trip.
+- **Every change after the trip is recorded** with time, old and new value and who changed it
+  (`changes-<year>.json`); the trip counts its changes. Nothing is deleted.
+- The odometer comes from a state (e.g. of the car adapter) at the start and the end of the trip. Without it, the
+  odometer of the first trip can be entered and is continued with the GPS distances.
+- After each trip and each change, `<name>/logbook-<year>.csv` and `<name>/logbook-<year>-changes.csv` are written
+  (`;` separated, UTF-8 with BOM for Excel, texts in the system language).
+
+Whether this logbook is accepted by a tax office depends on the country. In Germany, a logbook must be kept promptly
+and changes must be visible: the change log provides that, the prompt entry is up to you.
 
 ## Files
 
@@ -103,6 +167,8 @@ The trips are stored in the file storage of the instance, not in states:
 - `trips.0/<name>/trips-<year>.json` - the summaries of the trips of a year
 - `trips.0/<name>/tracks/<year>/<id>.geojson` and `.gpx` - the track, simplified to 2 m
 - `trips.0/<name>/current.json` - the running trip, so it survives a restart of the adapter
+- `trips.0/<name>/changes-<year>.json` - the changes of the logbook
+- `trips.0/<name>/logbook-<year>.csv` and `logbook-<year>-changes.csv` - the logbook as CSV
 
 ## Messages
 
@@ -111,8 +177,20 @@ The trips are stored in the file storage of the instance, not in states:
 sendTo('trips.0', 'getTrips', { object: 'Car', from: Date.now() - 7 * 24 * 3600000, limit: 20 }, list => console.log(list));
 // the track of one trip as GeoJSON or GPX
 sendTo('trips.0', 'getTrack', { object: 'Car', id: '20261123-081500', format: 'gpx' }, res => console.log(res.result));
+// the running trip so far, without the privacy zones
+sendTo('trips.0', 'getTrack', { object: 'Car', id: 'current', format: 'geojson' }, res => console.log(res.result));
 // end the running trip
 sendTo('trips.0', 'endTrip', { object: 'Car' });
+// the objects with their state prefix and units (for widgets)
+sendTo('trips.0', 'getObjects', {}, list => console.log(list));
+
+// logbook: change a trip (recorded in the change log)
+sendTo('trips.0', 'updateTrip', { object: 'Car', id: '20261123-081500', category: 'business', purpose: 'Customer visit', partner: 'ACME' }, res => console.log(res));
+// logbook of a year as CSV, or its changes
+sendTo('trips.0', 'exportLogbook', { object: 'Car', year: 2026 }, res => console.log(res.result));
+sendTo('trips.0', 'exportLogbook', { object: 'Car', year: 2026, changes: true }, res => console.log(res.result));
+// the changes as JSON
+sendTo('trips.0', 'getChanges', { object: 'Car', year: 2026 }, changes => console.log(changes));
 ```
 
 ## Places and privacy
@@ -130,14 +208,14 @@ stay for the statistics.
 ## Notifications
 
 Select an instance of `telegram`, `pushover`, `email`, `whatsapp-cmb` or `signal-cmb` and enable
-`Send a summary after each trip` on the object. The text is the one of `lastTrip.summary`.
+`Send a summary after each trip` on the object. The text is the one of `lastTrip.summary`. The alarms of the
+watch go to the same messenger.
 
 ## Todo
 
-- vis-2 widgets: map with the track, list of trips, calendar heatmap
-- Logbook for the tax office (private/business, purpose, unchangeable with a change log)
-- Boats: anchor watch, sailing vs. motoring, automatic logbook, polar diagram
-- Measured consumption (CAN, NMEA fuel rate, battery SoC), fuel log
+- Widgets: calendar heatmap, statistics tiles; editing the logbook in the trip list
+- Boats: automatic hourly logbook (position, SOG, COG, wind, pressure), polar diagram
+- Fuel log: refuellings from the level jumps, real consumption between two refuellings
 - Admin tab with the trips (merge, split, rename)
 
 <!--
@@ -147,6 +225,7 @@ Select an instance of `telegram`, `pushover`, `email`, `whatsapp-cmb` or `signal
 ## Changelog
 ### **WORK IN PROGRESS**
 * (@GermanBluefox) initial release
+* (@GermanBluefox) measured consumption (counter, level/SoC, flow), share under sail for boats, anchor/position watch, logbook with change log and CSV export
 
 ## License
 

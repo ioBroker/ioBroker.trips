@@ -6,7 +6,11 @@ export type SourceType = 'generic' | 'nmea' | 'serial-gps' | 'teltonika';
 /** `separate` = two states latitude/longitude, `latlon` = "lat;lon", `lonlat` = "lon;lat", `json` = JSON object */
 export type PositionFormat = 'separate' | 'latlon' | 'lonlat' | 'json';
 export type AccuracyType = 'meters' | 'hdop';
-export type ConsumptionMode = 'none' | 'distance' | 'hours';
+/**
+ * `distance`/`hours` = estimated from a constant; measured from a state: `counter` = total that grows,
+ * `level` = tank level or battery SoC, `rate` = flow in l/h or power in kW
+ */
+export type ConsumptionMode = 'none' | 'distance' | 'hours' | 'counter' | 'level' | 'rate';
 
 /** Numbers coming from jsonConfig may be strings, an empty string means "default for the object type" */
 type ConfigNumber = number | string;
@@ -42,6 +46,12 @@ export interface TrackedObjectConfig {
     consumptionMode: ConsumptionMode;
     /** Consumption per 100 distance units or per hour */
     consumption: ConfigNumber;
+    /** counter, level, rate: the state of the vehicle */
+    consumptionStateId: string;
+    /** level: the state is in % */
+    levelPercent: boolean;
+    /** level in %: capacity of the tank (l) or the battery (kWh) */
+    capacity: ConfigNumber;
     /** l or kWh */
     consumptionUnit: string;
     /** Price per consumption unit */
@@ -52,6 +62,24 @@ export interface TrackedObjectConfig {
     co2PerUnit: ConfigNumber;
     /** Send a summary after each trip */
     notify: boolean;
+
+    /** Meters of the anchor/position watch, empty = default of the type */
+    watchRadius: ConfigNumber;
+    /** Activate the watch at the end of each trip */
+    watchAuto: boolean;
+    /** Minutes without positions that are an alarm of the watch, 0 = off */
+    watchSignalMinutes: ConfigNumber;
+    /** Send the alarms of the watch to the messenger */
+    watchNotify: boolean;
+
+    /** Logbook: kind, purpose and partner per trip, export as CSV */
+    logbook: boolean;
+    /** Category of a trip if nothing else is set */
+    defaultCategory: '' | 'private' | 'business' | 'commute';
+    /** State with the odometer in the distance unit of the object */
+    odometerId: string;
+    /** Without an odometer state: the odometer at the first trip, then continued with the GPS distances */
+    odometerInitial: ConfigNumber;
 }
 
 export interface SourceConfig {

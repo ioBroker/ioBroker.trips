@@ -57,10 +57,22 @@
                             "label": "Type",
                             "default": "car",
                             "options": [
-                                { "label": "Car", "value": "car" },
-                                { "label": "Boat", "value": "boat" },
-                                { "label": "Person / phone", "value": "person" },
-                                { "label": "Other", "value": "other" }
+                                {
+                                    "label": "Car",
+                                    "value": "car"
+                                },
+                                {
+                                    "label": "Boat",
+                                    "value": "boat"
+                                },
+                                {
+                                    "label": "Person / phone",
+                                    "value": "person"
+                                },
+                                {
+                                    "label": "Other",
+                                    "value": "other"
+                                }
                             ],
                             "xs": 12,
                             "sm": 6,
@@ -74,10 +86,22 @@
                             "label": "Distance unit",
                             "default": "",
                             "options": [
-                                { "label": "Default of the type", "value": "" },
-                                { "label": "Kilometers", "value": "km" },
-                                { "label": "Nautical miles", "value": "nm" },
-                                { "label": "Miles", "value": "mi" }
+                                {
+                                    "label": "Default of the type",
+                                    "value": ""
+                                },
+                                {
+                                    "label": "Kilometers",
+                                    "value": "km"
+                                },
+                                {
+                                    "label": "Nautical miles",
+                                    "value": "nm"
+                                },
+                                {
+                                    "label": "Miles",
+                                    "value": "mi"
+                                }
                             ],
                             "xs": 12,
                             "sm": 6,
@@ -250,9 +274,30 @@
                             "label": "Consumption",
                             "default": "none",
                             "options": [
-                                { "label": "None", "value": "none" },
-                                { "label": "Per 100 distance units", "value": "distance" },
-                                { "label": "Per engine hour", "value": "hours" }
+                                {
+                                    "label": "None",
+                                    "value": "none"
+                                },
+                                {
+                                    "label": "Per 100 distance units",
+                                    "value": "distance"
+                                },
+                                {
+                                    "label": "Per engine hour",
+                                    "value": "hours"
+                                },
+                                {
+                                    "label": "Measured: counter (fuel used, energy)",
+                                    "value": "counter"
+                                },
+                                {
+                                    "label": "Measured: tank level or battery SoC",
+                                    "value": "level"
+                                },
+                                {
+                                    "label": "Measured: flow (l/h) or power (kW)",
+                                    "value": "rate"
+                                }
                             ],
                             "newLine": true,
                             "xs": 12,
@@ -268,7 +313,45 @@
                             "help": "e.g. 6.5 per 100 km or 2.5 per engine hour",
                             "min": 0,
                             "step": 0.1,
-                            "hidden": "!data.consumptionMode || data.consumptionMode === 'none'",
+                            "hidden": "!['distance','hours'].includes(data.consumptionMode)",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "consumptionStateId",
+                            "label": "State of the consumption",
+                            "help": "e.g. nmea.0.engineParametersDynamic.fuelRate, the SoC of the car or a meter of the fuel used",
+                            "hidden": "!['counter','level','rate'].includes(data.consumptionMode)",
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 8,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "checkbox",
+                            "attr": "levelPercent",
+                            "label": "The level is in %",
+                            "default": true,
+                            "hidden": "data.consumptionMode !== 'level'",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "capacity",
+                            "label": "Capacity of the tank or battery",
+                            "help": "In the unit of the consumption, for the level in %",
+                            "min": 0,
+                            "step": 0.1,
+                            "hidden": "data.consumptionMode !== 'level' || !data.levelPercent",
                             "xs": 12,
                             "sm": 6,
                             "md": 4,
@@ -281,8 +364,14 @@
                             "label": "Unit",
                             "default": "l",
                             "options": [
-                                { "label": "Liters", "value": "l" },
-                                { "label": "kWh", "value": "kWh" }
+                                {
+                                    "label": "Liters",
+                                    "value": "l"
+                                },
+                                {
+                                    "label": "kWh",
+                                    "value": "kWh"
+                                }
                             ],
                             "hidden": "!data.consumptionMode || data.consumptionMode === 'none'",
                             "xs": 12,
@@ -343,6 +432,144 @@
                             "md": 6,
                             "lg": 6,
                             "xl": 6
+                        },
+                        {
+                            "type": "header",
+                            "text": "Anchor watch / position watch",
+                            "size": 5,
+                            "newLine": true
+                        },
+                        {
+                            "type": "staticText",
+                            "text": "Switch it on with the state watch.active. An alarm comes when the object leaves the circle or the positions stop. For cars, the ignition ends the watch.",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 12,
+                            "lg": 12,
+                            "xl": 12
+                        },
+                        {
+                            "type": "number",
+                            "attr": "watchRadius",
+                            "label": "Alarm radius (m)",
+                            "help": "Default: car 100, boat 50, person 200",
+                            "min": 5,
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "watchSignalMinutes",
+                            "label": "Alarm without positions after",
+                            "help": "Minutes, 0 = off. Default: car 30, boat 5, person 60",
+                            "min": 0,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "checkbox",
+                            "attr": "watchAuto",
+                            "label": "Start the watch at the end of each trip",
+                            "default": false,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "checkbox",
+                            "attr": "watchNotify",
+                            "label": "Send the alarms to the messenger",
+                            "default": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "header",
+                            "text": "Logbook",
+                            "size": 5,
+                            "newLine": true
+                        },
+                        {
+                            "type": "checkbox",
+                            "attr": "logbook",
+                            "label": "Keep a logbook",
+                            "help": "Category, purpose and business partner per trip, every later change is recorded. Export as CSV",
+                            "default": false,
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "select",
+                            "attr": "defaultCategory",
+                            "label": "Default category",
+                            "default": "",
+                            "options": [
+                                {
+                                    "label": "None",
+                                    "value": ""
+                                },
+                                {
+                                    "label": "Private",
+                                    "value": "private"
+                                },
+                                {
+                                    "label": "Business",
+                                    "value": "business"
+                                },
+                                {
+                                    "label": "Commute",
+                                    "value": "commute"
+                                }
+                            ],
+                            "hidden": "!data.logbook",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "odometerId",
+                            "label": "Odometer state",
+                            "help": "Optional, in the distance unit of the object, e.g. from the car adapter",
+                            "hidden": "!data.logbook",
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 8,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "number",
+                            "attr": "odometerInitial",
+                            "label": "Odometer at the first trip",
+                            "help": "Without an odometer state: continued with the GPS distance",
+                            "min": 0,
+                            "hidden": "!data.logbook || !!data.odometerId",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
                         }
                     ]
                 }
@@ -404,10 +631,22 @@
                             "label": "Source type",
                             "default": "generic",
                             "options": [
-                                { "label": "Generic states", "value": "generic" },
-                                { "label": "ioBroker.nmea", "value": "nmea" },
-                                { "label": "ioBroker.serial-gps", "value": "serial-gps" },
-                                { "label": "Teltonika router (ioBroker.teltonika)", "value": "teltonika" }
+                                {
+                                    "label": "Generic states",
+                                    "value": "generic"
+                                },
+                                {
+                                    "label": "ioBroker.nmea",
+                                    "value": "nmea"
+                                },
+                                {
+                                    "label": "ioBroker.serial-gps",
+                                    "value": "serial-gps"
+                                },
+                                {
+                                    "label": "Teltonika router (ioBroker.teltonika)",
+                                    "value": "teltonika"
+                                }
                             ],
                             "xs": 12,
                             "sm": 6,
@@ -475,10 +714,22 @@
                             "label": "Position format",
                             "default": "separate",
                             "options": [
-                                { "label": "Latitude and longitude in two states", "value": "separate" },
-                                { "label": "One state lat;lon", "value": "latlon" },
-                                { "label": "One state lon;lat", "value": "lonlat" },
-                                { "label": "One state with JSON", "value": "json" }
+                                {
+                                    "label": "Latitude and longitude in two states",
+                                    "value": "separate"
+                                },
+                                {
+                                    "label": "One state lat;lon",
+                                    "value": "latlon"
+                                },
+                                {
+                                    "label": "One state lon;lat",
+                                    "value": "lonlat"
+                                },
+                                {
+                                    "label": "One state with JSON",
+                                    "value": "json"
+                                }
                             ],
                             "hidden": "data.type && data.type !== 'generic'",
                             "newLine": true,
@@ -543,10 +794,22 @@
                             "default": "km/h",
                             "noTranslation": true,
                             "options": [
-                                { "label": "km/h", "value": "km/h" },
-                                { "label": "kn", "value": "kn" },
-                                { "label": "m/s", "value": "m/s" },
-                                { "label": "mph", "value": "mph" }
+                                {
+                                    "label": "km/h",
+                                    "value": "km/h"
+                                },
+                                {
+                                    "label": "kn",
+                                    "value": "kn"
+                                },
+                                {
+                                    "label": "m/s",
+                                    "value": "m/s"
+                                },
+                                {
+                                    "label": "mph",
+                                    "value": "mph"
+                                }
                             ],
                             "hidden": "data.type === 'serial-gps' || (data.type === 'nmea' && !data.speedId)",
                             "xs": 12,
@@ -586,8 +849,14 @@
                             "label": "Accuracy type",
                             "default": "meters",
                             "options": [
-                                { "label": "Meters", "value": "meters" },
-                                { "label": "HDOP", "value": "hdop" }
+                                {
+                                    "label": "Meters",
+                                    "value": "meters"
+                                },
+                                {
+                                    "label": "HDOP",
+                                    "value": "hdop"
+                                }
                             ],
                             "hidden": "(data.type && data.type !== 'generic') || !data.accuracyId",
                             "xs": 12,
@@ -661,13 +930,48 @@
                     "md": 12,
                     "lg": 12,
                     "xl": 12,
-                    "uniqueColumns": ["name"],
+                    "uniqueColumns": [
+                        "name"
+                    ],
                     "items": [
-                        { "type": "text", "attr": "name", "title": "Name", "width": "30%", "default": "" },
-                        { "type": "number", "attr": "latitude", "title": "Latitude", "width": "20%", "min": -90, "max": 90 },
-                        { "type": "number", "attr": "longitude", "title": "Longitude", "width": "20%", "min": -180, "max": 180 },
-                        { "type": "number", "attr": "radius", "title": "Radius (m)", "width": "15%", "min": 10, "default": 100 },
-                        { "type": "checkbox", "attr": "privacy", "title": "Privacy zone", "width": "15%", "default": false }
+                        {
+                            "type": "text",
+                            "attr": "name",
+                            "title": "Name",
+                            "width": "30%",
+                            "default": ""
+                        },
+                        {
+                            "type": "number",
+                            "attr": "latitude",
+                            "title": "Latitude",
+                            "width": "20%",
+                            "min": -90,
+                            "max": 90
+                        },
+                        {
+                            "type": "number",
+                            "attr": "longitude",
+                            "title": "Longitude",
+                            "width": "20%",
+                            "min": -180,
+                            "max": 180
+                        },
+                        {
+                            "type": "number",
+                            "attr": "radius",
+                            "title": "Radius (m)",
+                            "width": "15%",
+                            "min": 10,
+                            "default": 100
+                        },
+                        {
+                            "type": "checkbox",
+                            "attr": "privacy",
+                            "title": "Privacy zone",
+                            "width": "15%",
+                            "default": false
+                        }
                     ]
                 },
                 "homePlace": {
@@ -706,7 +1010,13 @@
                     "label": "Messenger",
                     "help": "Sends the summary of each trip",
                     "adapter": "",
-                    "adapters": ["telegram", "pushover", "email", "whatsapp-cmb", "signal-cmb"],
+                    "adapters": [
+                        "telegram",
+                        "pushover",
+                        "email",
+                        "whatsapp-cmb",
+                        "signal-cmb"
+                    ],
                     "allowDeactivate": true,
                     "xs": 12,
                     "sm": 6,

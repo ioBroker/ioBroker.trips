@@ -48,6 +48,10 @@ export interface ActiveTrip {
     elevationGain: number;
     /** ms with the ignition/engine on */
     engineTime: number;
+    /** Meters with the engine on (boats: the rest was sailed) */
+    engineDistance: number;
+    /** The ignition/engine state was known during the trip */
+    engineKnown: boolean;
     points: TrackPoint[];
     stops: TripStop[];
     gaps: number;
@@ -133,6 +137,7 @@ export interface DetectorState {
     /** Where the current standing began */
     stopAnchor: SavedFix | null;
     stopAnchorDistance: number;
+    stopAnchorEngineDistance: number;
     stopAnchorPoints: number;
     lastInside: SavedFix | null;
     /** Reference altitude for the elevation gain */
@@ -179,6 +184,7 @@ function emptyState(): DetectorState {
         anchor: null,
         stopAnchor: null,
         stopAnchorDistance: 0,
+        stopAnchorEngineDistance: 0,
         stopAnchorPoints: 0,
         lastInside: null,
         altRef: null,
@@ -413,6 +419,8 @@ export class TripDetector {
             maxSpeed: 0,
             elevationGain: 0,
             engineTime: 0,
+            engineDistance: 0,
+            engineKnown: st.ignition !== null,
             points: [],
             stops: [],
             gaps: 0,
@@ -425,6 +433,7 @@ export class TripDetector {
         st.stopAnchor = null;
         st.lastInside = null;
         st.stopAnchorDistance = 0;
+        st.stopAnchorEngineDistance = 0;
         st.stopAnchorPoints = 0;
         st.altRef = null;
         if (origin) {
@@ -477,6 +486,9 @@ export class TripDetector {
             const d = distance(st.anchor.lat, st.anchor.lon, fix.lat, fix.lon);
             if (d >= Math.max(s.minDistance, fix.accuracy ?? 0)) {
                 trip.distance += d;
+                if (st.ignition === true) {
+                    trip.engineDistance = (trip.engineDistance || 0) + d;
+                }
                 if (timeGap) {
                     point.gap = true;
                     trip.gaps++;
@@ -492,6 +504,7 @@ export class TripDetector {
             ).map(({ keep: _keep, ...p }) => p);
             st.stopAnchorPoints = trip.points.length;
             st.stopAnchorDistance = trip.distance;
+            st.stopAnchorEngineDistance = trip.engineDistance || 0;
         }
 
         // --- max. speed ---
@@ -520,6 +533,7 @@ export class TripDetector {
         } else {
             st.stopAnchor = short(fix);
             st.stopAnchorDistance = trip.distance;
+            st.stopAnchorEngineDistance = trip.engineDistance || 0;
             st.stopAnchorPoints = trip.points.length;
             st.lastInside = null;
         }
@@ -562,6 +576,7 @@ export class TripDetector {
         if (trip.points.length > st.stopAnchorPoints) {
             trip.points.length = Math.max(st.stopAnchorPoints, 0);
             trip.distance = st.stopAnchorDistance;
+            trip.engineDistance = Math.min(st.stopAnchorEngineDistance || 0, trip.distance);
         }
         const lastPoint = trip.points[trip.points.length - 1];
         if (!lastPoint || lastPoint.ts < st.stopAnchor.ts) {
@@ -639,6 +654,9 @@ export class TripDetector {
         const st = this.st;
         const previous = st.ignition;
         st.ignition = on;
+        if (st.trip) {
+            st.trip.engineKnown = true;
+        }
         if (on && previous !== true) {
             st.engineOnSince = ts;
         } else if (!on && previous === true && st.engineOnSince !== null) {

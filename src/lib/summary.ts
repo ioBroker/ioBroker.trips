@@ -1,3 +1,4 @@
+import type { TripCategory } from './logbook';
 import type { TripReason } from './tripDetector';
 
 export interface SummaryStop {
@@ -30,6 +31,10 @@ export interface TripSummary {
     elevationGain?: number;
     /** Seconds with ignition/engine on */
     engineTime?: number;
+    /** Boats with a known engine state: meters with the engine on */
+    engineDistance?: number;
+    /** Boats with a known engine state: meters under sail */
+    sailDistance?: number;
     startLat: number | null;
     startLon: number | null;
     endLat: number | null;
@@ -48,8 +53,22 @@ export interface TripSummary {
     currency?: string;
     /** kg */
     co2?: number;
+    /** The consumption was measured, not estimated */
+    measured?: boolean;
     /** The track file exists (false after the retention) */
     track: boolean;
+
+    // --- logbook ---
+    category?: TripCategory;
+    purpose?: string;
+    /** Customer or business partner */
+    partner?: string;
+    driver?: string;
+    /** In the distance unit of the object */
+    odometerStart?: number;
+    odometerEnd?: number;
+    /** Number of changes after the trip was recorded */
+    changes?: number;
 }
 
 export type Period = 'today' | 'week' | 'month' | 'year' | 'total';
@@ -73,6 +92,10 @@ export interface PeriodStats {
     cost: number;
     /** kg */
     co2: number;
+    /** Meters under sail */
+    sailDistance: number;
+    /** Meters of the trips with a known engine state: the base of the share under sail */
+    sailBase: number;
 }
 
 /** Start of the period in local time */
@@ -109,6 +132,8 @@ export function aggregate(trips: TripSummary[], from: number): PeriodStats {
         consumption: 0,
         cost: 0,
         co2: 0,
+        sailDistance: 0,
+        sailBase: 0,
     };
     for (const trip of trips) {
         if (trip.start < from) {
@@ -124,6 +149,10 @@ export function aggregate(trips: TripSummary[], from: number): PeriodStats {
         stats.consumption += trip.consumption || 0;
         stats.cost += trip.cost || 0;
         stats.co2 += trip.co2 || 0;
+        if (trip.sailDistance !== undefined) {
+            stats.sailDistance += trip.sailDistance;
+            stats.sailBase += trip.distance;
+        }
     }
     return stats;
 }

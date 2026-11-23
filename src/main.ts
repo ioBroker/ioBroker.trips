@@ -24,6 +24,18 @@ import {
     type TrackPoint,
 } from './lib/tripDetector';
 import { toGeoJson, toGpx } from './lib/export';
+import { ConsumptionMeter, type MeterMode, type MeterState } from './lib/meter';
+import { PositionWatch, type WatchEvent, type WatchState } from './lib/watch';
+import {
+    applyChanges,
+    changesCsv,
+    LOGBOOK_FIELDS,
+    logbookCsv,
+    normalizeCategory,
+    type LogbookField,
+    type TripChange,
+} from './lib/logbook';
+import { text } from './lib/texts';
 
 /** Time based decisions (trip end, live duration) */
 const TICK_MS = 5000;
@@ -36,6 +48,15 @@ const TRACK_TOLERANCE = 2;
 /** Live states are written at least this often while no trip runs */
 const IDLE_LIVE_MS = 60000;
 
+/** current.json: the running trip, so that it survives a restart */
+interface Checkpoint {
+    detector: DetectorState;
+    meter?: MeterState;
+    odometerStart?: number | null;
+}
+
+const MEASURED_MODES: MeterMode[] = ['counter', 'level', 'rate'];
+
 interface ObjectRuntime {
     /** ID of the device object below the instance */
     id: string;
@@ -44,6 +65,12 @@ interface ObjectRuntime {
     detector: TripDetector;
     sources: SourceAssembler[];
     fusion: Fusion;
+    /** Anchor watch (boats), theft watch (cars) */
+    watch: PositionWatch;
+    /** Measured consumption from a state of the vehicle */
+    meter: ConsumptionMeter | null;
+    /** Odometer at the start of the running trip */
+    odometerStart: number | null;
     /** All summaries, sorted by start */
     trips: TripSummary[];
     lastLive: number;
@@ -59,6 +86,7 @@ export class TripsAdapter extends Adapter {
 
     private runtimes: Record<string, ObjectRuntime> = {};
     private sourcesByState: Record<string, SourceAssembler[]> = {};
+    private metersByState: Record<string, ObjectRuntime[]> = {};
     private places: Place[] = [];
     private home: Place | null = null;
     private store!: TripStore;
@@ -121,6 +149,10 @@ export class TripsAdapter extends Adapter {
         }
 
         await this.subscribeStatesAsync('*.control.*');
+        await this.subscribeStatesAsync('*.watch.*');
+        for (const field of LOGBOOK_FIELDS) {
+            await this.subscribeStatesAsync(`*.lastTrip.${field}`);
+        }
         this.tickTimer = this.setInterval(() => this.onTick(), TICK_MS);
         this.scheduleMidnight();
         this.retentionTimer = this.setInterval(() => this.runRetention(), 24 * 3600000);
@@ -153,7 +185,12 @@ export class TripsAdapter extends Adapter {
 
     private async initObject(id: string, config: TrackedObjectConfig): Promise<void> {
         const settings = objectSettings(config);
-        const saved = await this.store.readJson<DetectorState>(`${id}/current.json`);
+        const saved = await this.store.readJson<Checkpoint>(`${id}/current.json`);
+        const mode = config.consumptionMode as MeterMode;
+        const meterStateId = MEASURED_MODES.includes(mode) ? (config.consumptionStateId || '').trim() : '';
+        if (MEASURED_MODES.includes(mode) && !meterStateId) {
+            this.log.warn(`${config.name}: the measured consumption needs a state`);
+        }
         const rt: ObjectRuntime = {
             id,
             config,
@@ -161,11 +198,23 @@ export class TripsAdapter extends Adapter {
             detector: null as unknown as TripDetector,
             sources: [],
             fusion: null as unknown as Fusion,
+            watch: null as unknown as PositionWatch,
+            meter: meterStateId
+                ? new ConsumptionMeter(
+                      mode,
+                      { percent: !!config.levelPercent, capacity: configNumber(config.capacity, 0) },
+                      saved?.meter,
+                  )
+                : null,
+            odometerStart: saved?.odometerStart ?? null,
             trips: [],
             lastLive: 0,
             lastCheckpoint: Date.now(),
             queue: Promise.resolve(),
         };
+        if (rt.meter) {
+            (this.metersByState[meterStateId] ||= []).push(rt);
+        }
         rt.detector = new TripDetector(
             settings.detector,
             {
@@ -174,30 +223,83 @@ export class TripsAdapter extends Adapter {
                         `${config.name}: trip started (${trip.reason}) at ${new Date(trip.start).toLocaleString()}`,
                     );
                     rt.lastLive = Date.now();
+                    rt.meter?.start(trip.start);
                     this.enqueue(rt, async () => {
+                        rt.odometerStart = await this.readOdometer(rt);
                         await this.writeLive(rt);
                         await this.saveCheckpoint(rt);
                     });
                 },
-                onEnd: trip => this.enqueue(rt, () => this.finishTrip(rt, trip)),
+                onEnd: trip => {
+                    // synchronously, before a next trip can start the meter again
+                    const measured = rt.meter?.running ? rt.meter.stop(trip.end) : null;
+                    const odometerStart = rt.odometerStart;
+                    rt.odometerStart = null;
+                    this.enqueue(rt, () => this.finishTrip(rt, trip, measured, odometerStart));
+                },
             },
-            saved,
+            saved?.detector,
         );
-        if (saved?.trip) {
+        if (saved?.detector?.trip) {
             this.log.info(
-                `${config.name}: continuing the trip started at ${new Date(saved.trip.start).toLocaleString()}`,
+                `${config.name}: continuing the trip started at ${new Date(saved.detector.trip.start).toLocaleString()}`,
             );
         }
         rt.trips = await this.store.loadSummaries(id);
         this.runtimes[id] = rt;
 
         await this.createObjectStates(rt);
+        rt.watch = new PositionWatch(settings.watch, settings.watch.radius, await this.readWatch(rt));
+        await this.writeWatch(rt);
         const last = rt.trips[rt.trips.length - 1];
         if (last) {
             await this.writeLastTrip(rt, last);
         }
         await this.writeStats(rt);
         await this.setStateAsync(`${id}.control.manualTrip`, rt.detector.manual, true);
+        if (config.logbook) {
+            const category = await this.getStateAsync(`${id}.control.category`);
+            if (!normalizeCategory(category?.val)) {
+                await this.setStateAsync(`${id}.control.category`, config.defaultCategory || '', true);
+            }
+        }
+    }
+
+    /** Odometer at the start or the end of a trip, in the distance unit of the object */
+    private async readOdometer(rt: ObjectRuntime): Promise<number | null> {
+        const stateId = (rt.config.odometerId || '').trim();
+        if (!stateId) {
+            return null;
+        }
+        try {
+            const state = await this.getForeignStateAsync(stateId);
+            const value = configNumber(state?.val, NaN);
+            return Number.isFinite(value) ? value : null;
+        } catch (e) {
+            this.log.debug(`${rt.config.name}: cannot read the odometer ${stateId}: ${e.message}`);
+            return null;
+        }
+    }
+
+    /** The watch as it was before the restart */
+    private async readWatch(rt: ObjectRuntime): Promise<Partial<WatchState>> {
+        const value = async (id: string): Promise<ioBroker.StateValue | undefined> =>
+            (await this.getStateAsync(`${rt.id}.watch.${id}`))?.val;
+        const number = (v: ioBroker.StateValue | undefined): number | null => {
+            const n = configNumber(v, NaN);
+            return Number.isFinite(n) ? n : null;
+        };
+        const radius = number(await value('radius'));
+        return {
+            active: (await value('active')) === true,
+            lat: number(await value('latitude')),
+            lon: number(await value('longitude')),
+            radius: radius && radius > 0 ? radius : rt.settings.watch.radius,
+            since: number(await value('since')),
+            maxDistance: number(await value('maxDistance')) ?? 0,
+            alarm: (await value('alarm')) === true,
+            lastFix: Date.now(),
+        };
     }
 
     private async initSources(): Promise<void> {
@@ -249,6 +351,15 @@ export class TripsAdapter extends Adapter {
             await this.subscribeForeignStatesAsync(ids);
         }
 
+        // states of the measured consumption
+        const meterIds = Object.keys(this.metersByState);
+        for (const id of meterIds) {
+            this.onMeterState(id, await this.getForeignStateAsync(id));
+        }
+        if (meterIds.length) {
+            await this.subscribeForeignStatesAsync(meterIds);
+        }
+
         // Take over the current ignition, e.g. after a restart while driving
         const now = Date.now();
         for (const rt of Object.values(this.runtimes)) {
@@ -272,6 +383,11 @@ export class TripsAdapter extends Adapter {
         const result = rt.detector.processFix(fix, now);
         if (result !== 'accepted') {
             this.log.debug(`${rt.config.name}: position of ${fix.source} ignored (${result})`);
+        } else if (rt.watch.state.active) {
+            const event = rt.watch.onFix(fix, now);
+            if (event) {
+                this.onWatchEvent(rt, event);
+            }
         }
         if (now - rt.lastLive >= this.liveIntervalMs) {
             rt.lastLive = now;
@@ -286,13 +402,56 @@ export class TripsAdapter extends Adapter {
         const now = Date.now();
         rt.detector.setIgnition(on, Math.min(ts, now), now);
         rt.lastLive = now;
+        if (on && rt.settings.type === 'car' && rt.watch.state.active) {
+            // the owner drives away; a car moved without the ignition still gives the alarm
+            this.log.info(`${rt.config.name}: watch ended by the ignition`);
+            rt.watch.deactivate();
+        }
         this.enqueue(rt, () => this.writeLive(rt));
+    }
+
+    private onMeterState(id: string, state: ioBroker.State | null | undefined): void {
+        if (!state) {
+            return;
+        }
+        const value = configNumber(state.val, NaN);
+        if (!Number.isFinite(value)) {
+            return;
+        }
+        for (const rt of this.metersByState[id] || []) {
+            rt.meter?.update(value, state.ts || Date.now());
+        }
+    }
+
+    private onWatchEvent(rt: ObjectRuntime, event: WatchEvent): void {
+        const watch = rt.watch.state;
+        const lang = this.systemLanguage;
+        let message: string;
+        if (event === 'alarm') {
+            const title = text(lang, rt.settings.type === 'boat' ? 'anchorAlarm' : 'positionAlarm');
+            message = `${rt.config.name}: ${title}! ${text(lang, 'alarmText', { distance: watch.distance ?? 0, radius: watch.radius })}`;
+            this.log.warn(message);
+        } else if (event === 'signalLost') {
+            message = `${rt.config.name}: ${text(lang, 'signalLost', { minutes: Math.round(rt.settings.watch.signalLostSeconds / 60) })}`;
+            this.log.warn(message);
+        } else {
+            message = `${rt.config.name}: ${text(lang, 'signalBack')}`;
+            this.log.info(message);
+        }
+        if (rt.config.watchNotify !== false) {
+            this.sendNotification(message, rt.config.name);
+        }
+        this.enqueue(rt, () => this.writeWatch(rt));
     }
 
     private onTick(): void {
         const now = Date.now();
         for (const rt of Object.values(this.runtimes)) {
             rt.detector.tick(now);
+            const watchEvent = rt.watch.tick(now);
+            if (watchEvent) {
+                this.onWatchEvent(rt, watchEvent);
+            }
             const active = !!rt.detector.trip;
             if (now - rt.lastLive >= (active ? this.liveIntervalMs : IDLE_LIVE_MS)) {
                 rt.lastLive = now;
@@ -320,26 +479,121 @@ export class TripsAdapter extends Adapter {
                 source.onStateChange(id, state);
             }
         }
+        if (this.metersByState[id]) {
+            this.onMeterState(id, state);
+        }
     }
 
     private async onControl(id: string, state: ioBroker.State): Promise<void> {
-        const match = id.match(/^(.+)\.control\.(manualTrip|endTrip)$/);
+        const match = id.match(/^(.+)\.(control|lastTrip|watch)\.([a-zA-Z]+)$/);
         const rt = match ? this.runtimes[match[1]] : null;
         if (!match || !rt) {
             return;
         }
+        const [, , channel, name] = match;
         const now = Date.now();
-        if (match[2] === 'manualTrip') {
-            const on = state.val === true || state.val === 'true' || state.val === 1 || state.val === 'on';
-            rt.detector.setManual(on, now);
-            await this.setStateAsync(id, rt.detector.manual, true);
-        } else {
-            rt.detector.finish(now);
-            await this.setStateAsync(id, false, true);
-            await this.setStateAsync(`${rt.id}.control.manualTrip`, false, true);
+        const isOn = state.val === true || state.val === 'true' || state.val === 1 || state.val === 'on';
+
+        if (channel === 'watch') {
+            this.onWatchControl(rt, name, state, isOn);
+            return;
+        }
+        if (channel === 'lastTrip') {
+            if ((LOGBOOK_FIELDS as readonly string[]).includes(name)) {
+                const last = rt.trips[rt.trips.length - 1];
+                if (last) {
+                    this.enqueue(rt, async () => {
+                        try {
+                            await this.updateTrip(rt, last.id, { [name]: state.val }, 'state');
+                        } catch (e) {
+                            this.log.warn(`${rt.config.name}: ${e.message}`);
+                            await this.writeLastTrip(rt, last);
+                        }
+                    });
+                }
+            }
+            return;
+        }
+        switch (name) {
+            case 'manualTrip':
+                rt.detector.setManual(isOn, now);
+                await this.setStateAsync(id, rt.detector.manual, true);
+                break;
+            case 'endTrip':
+                rt.detector.finish(now);
+                await this.setStateAsync(id, false, true);
+                await this.setStateAsync(`${rt.id}.control.manualTrip`, false, true);
+                break;
+            case 'category': {
+                // for the running trip, or the next one
+                const category = normalizeCategory(state.val);
+                if (!category && state.val !== '' && state.val !== null) {
+                    this.log.warn(`${rt.config.name}: invalid category "${String(state.val)}"`);
+                }
+                await this.setStateAsync(id, category ?? '', true);
+                return;
+            }
+            case 'purpose':
+            case 'partner':
+            case 'driver':
+                await this.setStateAsync(id, typeof state.val === 'string' ? state.val.trim() : '', true);
+                return;
+            default:
+                return;
         }
         rt.lastLive = now;
         this.enqueue(rt, () => this.writeLive(rt));
+    }
+
+    private onWatchControl(rt: ObjectRuntime, name: string, state: ioBroker.State, isOn: boolean): void {
+        const watch = rt.watch;
+        const number = configNumber(state.val, NaN);
+        switch (name) {
+            case 'active':
+                if (isOn) {
+                    // the last position, else the one set before by hand
+                    const fix = rt.detector.lastFix;
+                    const lat = fix?.lat ?? watch.state.lat;
+                    const lon = fix?.lon ?? watch.state.lon;
+                    if (lat === null || lon === null) {
+                        this.log.warn(`${rt.config.name}: no position yet, the watch cannot start`);
+                        break;
+                    }
+                    watch.activate(lat, lon, Date.now());
+                    this.log.info(`${rt.config.name}: watch started, radius ${watch.state.radius} m`);
+                } else if (watch.state.active) {
+                    watch.deactivate();
+                    this.log.info(`${rt.config.name}: watch ended`);
+                }
+                break;
+            case 'latitude':
+            case 'longitude':
+                if (Number.isFinite(number)) {
+                    const lat = name === 'latitude' ? number : watch.state.lat;
+                    const lon = name === 'longitude' ? number : watch.state.lon;
+                    if (lat !== null && lon !== null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+                        watch.setCenter(lat, lon);
+                    } else if (lat !== null && lon === null) {
+                        watch.state.lat = lat;
+                    } else if (lon !== null && lat === null) {
+                        watch.state.lon = lon;
+                    }
+                }
+                break;
+            case 'radius':
+                if (number > 0) {
+                    watch.setRadius(number);
+                }
+                break;
+            case 'alarm':
+                if (!isOn) {
+                    watch.acknowledge();
+                }
+                break;
+            default:
+                return;
+        }
+        this.enqueue(rt, () => this.writeWatch(rt, true));
     }
 
     // ------------------------------------------------------------------ objects
@@ -349,7 +603,9 @@ export class TripsAdapter extends Adapter {
         const speedUnit = rt.settings.speedUnit;
         const consumptionUnit = rt.config.consumptionUnit || 'l';
         const currency = this.config.currency || '€';
-        const withConsumption = rt.config.consumptionMode === 'distance' || rt.config.consumptionMode === 'hours';
+        const withConsumption = this.withConsumption(rt);
+        const measured = !!rt.meter;
+        const boat = rt.settings.type === 'boat';
 
         await this.extendObjectAsync(rt.id, {
             type: 'device',
@@ -361,7 +617,11 @@ export class TripsAdapter extends Adapter {
             lastTrip: 'Last trip',
             stats: 'Statistics',
             control: 'Control',
+            watch: boat ? 'Anchor watch' : 'Position watch',
         };
+        if (rt.config.logbook) {
+            channels.logbook = 'Logbook';
+        }
         for (const [channel, name] of Object.entries(channels)) {
             await this.extendObjectAsync(`${rt.id}.${channel}`, { type: 'channel', common: { name }, native: {} });
         }
@@ -405,7 +665,76 @@ export class TripsAdapter extends Adapter {
             'lastTrip.gpx': { name: 'GPX file', type: 'string', role: 'url' },
             'control.manualTrip': { name: 'Manual trip', type: 'boolean', role: 'switch', write: true },
             'control.endTrip': { name: 'End the trip now', type: 'boolean', role: 'button', write: true, read: false },
+            'watch.active': { name: 'Watch is active', type: 'boolean', role: 'switch', write: true, def: false },
+            'watch.latitude': {
+                name: 'Latitude of the watched position',
+                type: 'number',
+                role: 'value.gps.latitude',
+                unit: '°',
+                write: true,
+            },
+            'watch.longitude': {
+                name: 'Longitude of the watched position',
+                type: 'number',
+                role: 'value.gps.longitude',
+                unit: '°',
+                write: true,
+            },
+            'watch.radius': { name: 'Alarm radius', type: 'number', role: 'level', unit: 'm', write: true, min: 5 },
+            'watch.distance': {
+                name: 'Distance from the watched position',
+                type: 'number',
+                role: 'value.distance',
+                unit: 'm',
+            },
+            'watch.maxDistance': {
+                name: boat ? 'Swing circle (farthest position)' : 'Farthest position',
+                type: 'number',
+                role: 'value.distance',
+                unit: 'm',
+            },
+            'watch.alarm': {
+                name: 'Alarm (write false to acknowledge)',
+                type: 'boolean',
+                role: 'indicator.alarm',
+                write: true,
+                def: false,
+            },
+            'watch.signalLost': { name: 'No positions any more', type: 'boolean', role: 'indicator.alarm', def: false },
+            'watch.since': { name: 'Watching since', type: 'number', role: 'date' },
         };
+        if (boat) {
+            states['lastTrip.sailDistance'] = {
+                name: 'Distance under sail',
+                type: 'number',
+                role: 'value.distance',
+                unit,
+            };
+            states['lastTrip.sailShare'] = { name: 'Share under sail', type: 'number', role: 'value', unit: '%' };
+        }
+        if (rt.config.logbook) {
+            const categoryStates = { '': '---', private: 'private', business: 'business', commute: 'commute' };
+            const text = (name: string, write = true): StateDefinition => ({
+                name,
+                type: 'string',
+                role: 'text',
+                write,
+            });
+            states['control.category'] = {
+                ...text('Category of the running or next trip'),
+                states: categoryStates,
+            };
+            states['control.purpose'] = text('Purpose of the running or next trip');
+            states['control.partner'] = text('Business partner of the running or next trip');
+            states['control.driver'] = text('Driver');
+            states['lastTrip.category'] = { ...text('Category'), states: categoryStates };
+            states['lastTrip.purpose'] = text('Purpose');
+            states['lastTrip.partner'] = text('Business partner');
+            states['lastTrip.driver'] = text('Driver');
+            states['lastTrip.odometerEnd'] = { name: 'Odometer at the end', type: 'number', role: 'value', unit };
+            states['logbook.csv'] = { name: 'Logbook of this year (CSV)', type: 'string', role: 'url' };
+            states['logbook.changes'] = { name: 'Changes of this year (CSV)', type: 'string', role: 'url' };
+        }
         if (this.home) {
             states['live.distanceHome'] = {
                 name: `Distance to ${this.home.name}`,
@@ -416,7 +745,7 @@ export class TripsAdapter extends Adapter {
         }
         if (withConsumption) {
             states['live.consumption'] = {
-                name: 'Consumption (estimated)',
+                name: measured ? 'Consumption (measured)' : 'Consumption (estimated)',
                 type: 'number',
                 role: 'value',
                 unit: consumptionUnit,
@@ -449,6 +778,15 @@ export class TripsAdapter extends Adapter {
                 role: 'value.speed.max',
                 unit: speedUnit,
             };
+            if (boat) {
+                states[`${prefix}.sailDistance`] = {
+                    name: 'Distance under sail',
+                    type: 'number',
+                    role: 'value.distance',
+                    unit,
+                };
+                states[`${prefix}.sailShare`] = { name: 'Share under sail', type: 'number', role: 'value', unit: '%' };
+            }
             if (withConsumption) {
                 states[`${prefix}.consumption`] = {
                     name: 'Consumption',
@@ -507,13 +845,50 @@ export class TripsAdapter extends Adapter {
                 );
             }
         }
-        if (rt.config.consumptionMode === 'distance' || rt.config.consumptionMode === 'hours') {
+        if (this.withConsumption(rt)) {
             const trip = rt.detector.trip;
-            values['live.consumption'] = trip
-                ? round(this.consumptionOf(rt, trip.distance, trip.engineTime || live.duration, live.duration) ?? 0, 2)
-                : 0;
+            let consumption = 0;
+            if (trip && rt.meter) {
+                consumption = rt.meter.current(now);
+            } else if (trip) {
+                consumption =
+                    this.consumptionOf(rt, trip.distance, trip.engineTime || live.duration, live.duration) ?? 0;
+            }
+            values['live.consumption'] = round(consumption, 2);
         }
         await this.setValues(rt, values);
+        await this.writeWatch(rt);
+    }
+
+    /** The watch states; `force` writes also the unchanged ones */
+    private async writeWatch(rt: ObjectRuntime, force = false): Promise<void> {
+        const watch = rt.watch?.state;
+        if (!watch) {
+            return;
+        }
+        const values: Record<string, ioBroker.StateValue> = {
+            'watch.active': watch.active,
+            'watch.latitude': watch.lat === null ? null : round(watch.lat, 7),
+            'watch.longitude': watch.lon === null ? null : round(watch.lon, 7),
+            'watch.radius': watch.radius,
+            'watch.distance': watch.active ? watch.distance : null,
+            'watch.maxDistance': watch.maxDistance,
+            'watch.alarm': watch.alarm,
+            'watch.signalLost': watch.signalLost,
+            'watch.since': watch.since,
+        };
+        for (const [id, val] of Object.entries(values)) {
+            if (force) {
+                await this.setStateAsync(`${rt.id}.${id}`, val, true);
+            } else {
+                await this.setStateChangedAsync(`${rt.id}.${id}`, val, true);
+            }
+        }
+    }
+
+    private withConsumption(rt: ObjectRuntime): boolean {
+        const mode = rt.config.consumptionMode;
+        return mode === 'distance' || mode === 'hours' || !!rt.meter;
     }
 
     private async writeLastTrip(rt: ObjectRuntime, summary: TripSummary): Promise<void> {
@@ -536,10 +911,25 @@ export class TripsAdapter extends Adapter {
             'lastTrip.json': JSON.stringify(summary),
             'lastTrip.gpx': summary.track ? `/${this.namespace}/${TripStore.trackPath(rt.id, summary, 'gpx')}` : '',
         };
-        if (rt.config.consumptionMode === 'distance' || rt.config.consumptionMode === 'hours') {
+        if (this.withConsumption(rt)) {
             values['lastTrip.consumption'] = summary.consumption ?? null;
             values['lastTrip.cost'] = summary.cost ?? null;
             values['lastTrip.co2'] = summary.co2 ?? null;
+        }
+        if (rt.settings.type === 'boat') {
+            values['lastTrip.sailDistance'] =
+                summary.sailDistance === undefined ? null : round(summary.sailDistance / meters, 2);
+            values['lastTrip.sailShare'] =
+                summary.sailDistance === undefined || !summary.distance
+                    ? null
+                    : Math.round((summary.sailDistance / summary.distance) * 100);
+        }
+        if (rt.config.logbook) {
+            values['lastTrip.category'] = summary.category ?? '';
+            values['lastTrip.purpose'] = summary.purpose ?? '';
+            values['lastTrip.partner'] = summary.partner ?? '';
+            values['lastTrip.driver'] = summary.driver ?? '';
+            values['lastTrip.odometerEnd'] = summary.odometerEnd ?? null;
         }
         await this.setValues(rt, values);
     }
@@ -548,7 +938,7 @@ export class TripsAdapter extends Adapter {
         const now = new Date();
         const meters = METERS_PER_UNIT[rt.settings.unit];
         const speedUnit = rt.settings.speedUnit;
-        const withConsumption = rt.config.consumptionMode === 'distance' || rt.config.consumptionMode === 'hours';
+        const withConsumption = this.withConsumption(rt);
         for (const period of PERIODS) {
             const stats = aggregate(rt.trips, periodStart(period, now));
             const prefix = `stats.${period}`;
@@ -565,6 +955,12 @@ export class TripsAdapter extends Adapter {
                 values[`${prefix}.consumption`] = round(stats.consumption, 2);
                 values[`${prefix}.cost`] = round(stats.cost, 2);
                 values[`${prefix}.co2`] = round(stats.co2, 1);
+            }
+            if (rt.settings.type === 'boat') {
+                values[`${prefix}.sailDistance`] = round(stats.sailDistance / meters, 2);
+                values[`${prefix}.sailShare`] = stats.sailBase
+                    ? Math.round((stats.sailDistance / stats.sailBase) * 100)
+                    : null;
             }
             await this.setValues(rt, values);
         }
@@ -606,7 +1002,12 @@ export class TripsAdapter extends Adapter {
         return undefined;
     }
 
-    private async buildSummary(rt: ObjectRuntime, trip: FinishedTrip): Promise<TripSummary> {
+    private async buildSummary(
+        rt: ObjectRuntime,
+        trip: FinishedTrip,
+        measured: number | null,
+        odometerStart: number | null,
+    ): Promise<TripSummary> {
         const first = trip.points[0];
         const last = trip.points[trip.points.length - 1];
         const duration = Math.max(0, (trip.end - trip.start) / 1000);
@@ -656,6 +1057,12 @@ export class TripsAdapter extends Adapter {
         if (trip.engineTime > 0) {
             summary.engineTime = Math.round(trip.engineTime / 1000);
         }
+        if (rt.settings.type === 'boat' && trip.engineKnown) {
+            // sailing = moving with the engine off
+            const engineDistance = Math.min(Math.round(trip.engineDistance || 0), summary.distance);
+            summary.engineDistance = engineDistance;
+            summary.sailDistance = summary.distance - engineDistance;
+        }
         if (first) {
             summary.from = await this.placeName(first.lat, first.lon);
         }
@@ -663,8 +1070,13 @@ export class TripsAdapter extends Adapter {
             summary.to = await this.placeName(last.lat, last.lon);
         }
 
-        const consumption = this.consumptionOf(rt, trip.distance, trip.engineTime, trip.movingTime);
+        const consumption = rt.meter
+            ? measured
+            : this.consumptionOf(rt, trip.distance, trip.engineTime, trip.movingTime);
         if (consumption !== null) {
+            if (rt.meter) {
+                summary.measured = true;
+            }
             const unit = rt.config.consumptionUnit || 'l';
             summary.consumption = round(consumption, 2);
             summary.consumptionUnit = unit;
@@ -687,7 +1099,52 @@ export class TripsAdapter extends Adapter {
                 summary.co2 = round(consumption * co2Factor, 2);
             }
         }
+        if (rt.config.logbook) {
+            await this.addLogbookFields(rt, summary, odometerStart);
+        }
         return summary;
+    }
+
+    /** Category, purpose, partner and driver of the control states, and the odometer */
+    private async addLogbookFields(
+        rt: ObjectRuntime,
+        summary: TripSummary,
+        odometerStart: number | null,
+    ): Promise<void> {
+        const control = async (name: string): Promise<string> => {
+            const value = (await this.getStateAsync(`${rt.id}.control.${name}`))?.val;
+            return typeof value === 'string' ? value.trim() : '';
+        };
+        const category = normalizeCategory(await control('category')) ?? normalizeCategory(rt.config.defaultCategory);
+        if (category) {
+            summary.category = category;
+        }
+        for (const field of ['purpose', 'partner', 'driver'] as const) {
+            const value = await control(field);
+            if (value) {
+                summary[field] = value;
+            }
+        }
+        // purpose and partner belong to one trip, the category goes back to the default
+        await this.setStateAsync(`${rt.id}.control.purpose`, '', true);
+        await this.setStateAsync(`${rt.id}.control.partner`, '', true);
+        await this.setStateAsync(`${rt.id}.control.category`, rt.config.defaultCategory || '', true);
+
+        const kilometers = summary.distance / METERS_PER_UNIT[rt.settings.unit];
+        const odometerEnd = await this.readOdometer(rt);
+        if (odometerEnd !== null) {
+            summary.odometerEnd = round(odometerEnd, 1);
+            summary.odometerStart = round(odometerStart ?? odometerEnd - kilometers, 1);
+        } else {
+            // continued from the last trip with the GPS distance
+            const previous = [...rt.trips].reverse().find(t => t.odometerEnd !== undefined)?.odometerEnd;
+            const initial = configNumber(rt.config.odometerInitial, 0);
+            const start = previous ?? (initial > 0 ? initial : null);
+            if (start !== null) {
+                summary.odometerStart = round(start, 1);
+                summary.odometerEnd = round(start + kilometers, 1);
+            }
+        }
     }
 
     /** Summary of the running trip, without addresses and consumption */
@@ -745,14 +1202,20 @@ export class TripsAdapter extends Adapter {
         return simplify(result, TRACK_TOLERANCE).map(({ keep: _keep, ...point }) => point);
     }
 
-    private async finishTrip(rt: ObjectRuntime, trip: FinishedTrip): Promise<void> {
+    private async finishTrip(
+        rt: ObjectRuntime,
+        trip: FinishedTrip,
+        measured: number | null,
+        odometerStart: number | null,
+    ): Promise<void> {
         if (trip.distance < MIN_TRIP_DISTANCE && trip.reason !== 'manual') {
             this.log.debug(`${rt.config.name}: trip of ${Math.round(trip.distance)} m discarded`);
             await this.store.delete(`${rt.id}/current.json`);
             await this.writeLive(rt);
+            this.autoWatch(rt, trip);
             return;
         }
-        const summary = await this.buildSummary(rt, trip);
+        const summary = await this.buildSummary(rt, trip, measured, odometerStart);
         let id = summary.id;
         for (let i = 2; rt.trips.some(t => t.id === id); i++) {
             id = `${summary.id}-${i}`;
@@ -781,12 +1244,102 @@ export class TripsAdapter extends Adapter {
         await this.setStateChangedAsync(`${rt.id}.control.manualTrip`, rt.detector.manual, true);
         this.notify(rt, summary, text);
         await this.saveGeocache();
+        if (rt.config.logbook) {
+            await this.writeLogbookFiles(rt, new Date(summary.start).getFullYear());
+        }
+        this.autoWatch(rt, trip);
+    }
+
+    /** Starts the watch at the end of a trip, if configured */
+    private autoWatch(rt: ObjectRuntime, trip: FinishedTrip): void {
+        if (!rt.config.watchAuto || rt.watch.state.active) {
+            return;
+        }
+        const end = trip.points[trip.points.length - 1] ?? rt.detector.lastFix;
+        if (end) {
+            rt.watch.activate(end.lat, end.lon, Date.now());
+            this.log.info(`${rt.config.name}: watch started, radius ${rt.watch.state.radius} m`);
+            this.enqueue(rt, () => this.writeWatch(rt, true));
+        }
+    }
+
+    // ------------------------------------------------------------------ logbook
+
+    /**
+     * Changes the logbook fields of a trip and records the change
+     *
+     * @param rt the object
+     * @param id ID of the trip
+     * @param values the new values
+     * @param source who changed it
+     */
+    private async updateTrip(
+        rt: ObjectRuntime,
+        id: string,
+        values: Partial<Record<LogbookField, unknown>>,
+        source: string,
+    ): Promise<TripSummary> {
+        const trip = rt.trips.find(t => t.id === id);
+        if (!trip) {
+            throw new Error(`Unknown trip "${id}"`);
+        }
+        const changes = applyChanges(trip, values, Date.now(), source);
+        if (changes.length) {
+            const year = new Date(trip.start).getFullYear();
+            const file = `${rt.id}/changes-${year}.json`;
+            const log = (await this.store.readJson<TripChange[]>(file)) || [];
+            log.push(...changes);
+            await this.store.writeJson(file, log);
+            await this.store.saveYear(rt.id, year, rt.trips);
+            for (const change of changes) {
+                this.log.info(
+                    `${rt.config.name}: trip ${id} ${change.field} "${change.old ?? ''}" → "${change.new ?? ''}" (${source})`,
+                );
+            }
+            if (rt.config.logbook) {
+                await this.writeLogbookFiles(rt, year);
+            }
+        }
+        if (rt.trips[rt.trips.length - 1] === trip) {
+            await this.writeLastTrip(rt, trip);
+        }
+        return trip;
+    }
+
+    private csvOptions(rt: ObjectRuntime): Parameters<typeof logbookCsv>[1] {
+        return {
+            lang: this.systemLanguage,
+            meters: METERS_PER_UNIT[rt.settings.unit],
+            unit: rt.settings.unit,
+            formatNumber: (value, digits) => this.formatNumber(value, digits),
+        };
+    }
+
+    /** `<object>/logbook-<year>.csv` and `<object>/logbook-<year>-changes.csv`, served by the web adapter */
+    private async writeLogbookFiles(rt: ObjectRuntime, year: number): Promise<void> {
+        const from = new Date(year, 0, 1).getTime();
+        const to = new Date(year + 1, 0, 1).getTime();
+        const trips = rt.trips.filter(t => t.start >= from && t.start < to);
+        const changes = (await this.store.readJson<TripChange[]>(`${rt.id}/changes-${year}.json`)) || [];
+        const file = `${rt.id}/logbook-${year}.csv`;
+        const changesFile = `${rt.id}/logbook-${year}-changes.csv`;
+        await this.store.writeText(file, logbookCsv(trips, this.csvOptions(rt)));
+        await this.store.writeText(changesFile, changesCsv(changes, this.systemLanguage));
+        if (year === new Date().getFullYear()) {
+            await this.setStateChangedAsync(`${rt.id}.logbook.csv`, `/${this.namespace}/${file}`, true);
+            await this.setStateChangedAsync(`${rt.id}.logbook.changes`, `/${this.namespace}/${changesFile}`, true);
+        }
     }
 
     private async saveCheckpoint(rt: ObjectRuntime): Promise<void> {
         rt.lastCheckpoint = Date.now();
         if (rt.detector.trip) {
-            await this.store.writeJson(`${rt.id}/current.json`, rt.detector.state);
+            const checkpoint: Checkpoint = {
+                detector: rt.detector.state,
+                meter: rt.meter?.state,
+                odometerStart: rt.odometerStart,
+            };
+            await this.store.writeJson(`${rt.id}/current.json`, checkpoint);
         }
     }
 
@@ -826,13 +1379,26 @@ export class TripsAdapter extends Adapter {
         return `${rt.config.name}: ${parts.join(', ')}`;
     }
 
-    private notify(rt: ObjectRuntime, summary: TripSummary, text: string): void {
-        const instance = (this.config.notificationInstance || '').trim();
-        if (!instance || !rt.config.notify) {
+    private notify(rt: ObjectRuntime, summary: TripSummary, message: string): void {
+        if (!rt.config.notify) {
             return;
         }
         const minDistance = configNumber(this.config.notificationMinDistance, 0);
         if (summary.distance / METERS_PER_UNIT[rt.settings.unit] < minDistance) {
+            return;
+        }
+        this.sendNotification(message, `${rt.config.name}: trip`);
+    }
+
+    /**
+     * Sends a text to the configured messenger
+     *
+     * @param text the message
+     * @param subject subject of an email
+     */
+    private sendNotification(text: string, subject: string): void {
+        const instance = (this.config.notificationInstance || '').trim();
+        if (!instance) {
             return;
         }
         const user = (this.config.notificationUser || '').trim();
@@ -846,9 +1412,7 @@ export class TripsAdapter extends Adapter {
                 message = user ? { message: text, device: user } : { message: text };
                 break;
             case 'email':
-                message = user
-                    ? { text, subject: `${rt.config.name}: trip`, to: user }
-                    : { text, subject: `${rt.config.name}: trip` };
+                message = user ? { text, subject, to: user } : { text, subject };
                 break;
             case 'whatsapp-cmb':
             case 'signal-cmb':
@@ -921,7 +1485,7 @@ export class TripsAdapter extends Adapter {
         const msg: Record<string, any> = obj.message && typeof obj.message === 'object' ? obj.message : {};
         let result: unknown;
         try {
-            result = await this.handleMessage(obj.command, msg);
+            result = await this.handleMessage(obj.command, msg, obj.from || 'message');
         } catch (e) {
             result = { error: e.message };
         }
@@ -930,7 +1494,27 @@ export class TripsAdapter extends Adapter {
         }
     }
 
-    private async handleMessage(command: string, msg: Record<string, any>): Promise<unknown> {
+    /** Runs a job in the queue of the object and returns its result */
+    private queued<T>(rt: ObjectRuntime, job: () => Promise<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            this.enqueue(rt, async () => {
+                try {
+                    resolve(await job());
+                } catch (e) {
+                    reject(e instanceof Error ? e : new Error(String(e)));
+                }
+            });
+        });
+    }
+
+    private yearRange(msg: Record<string, any>): { from: number; to: number; year: number } {
+        const year = Math.round(configNumber(msg.year, new Date().getFullYear()));
+        const from = configNumber(msg.from, new Date(year, 0, 1).getTime());
+        const to = configNumber(msg.to, new Date(year + 1, 0, 1).getTime());
+        return { from, to, year };
+    }
+
+    private async handleMessage(command: string, msg: Record<string, any>, from: string): Promise<unknown> {
         switch (command) {
             case 'getObjectNames':
                 return (this.config.objects || []).filter(o => o?.name).map(o => ({ label: o.name, value: o.name }));
@@ -1006,6 +1590,50 @@ export class TripsAdapter extends Adapter {
                 }
                 const text = await this.store.readText(TripStore.trackPath(rt.id, trip, format));
                 return text ? { result: text } : { error: 'Track file not found' };
+            }
+
+            case 'updateTrip': {
+                // logbook: { object, id, category?, purpose?, partner?, driver? }
+                const rt = this.findRuntime(msg.object);
+                if (!rt) {
+                    return { error: `Unknown object "${msg.object}"` };
+                }
+                const values: Partial<Record<LogbookField, unknown>> = {};
+                for (const field of LOGBOOK_FIELDS) {
+                    if (field in msg) {
+                        values[field] = msg[field];
+                    }
+                }
+                const id = typeof msg.id === 'string' ? msg.id : '';
+                const trip = await this.queued(rt, () =>
+                    this.updateTrip(rt, id, values, from.replace(/^system\.adapter\./, '')),
+                );
+                return { result: trip };
+            }
+
+            case 'exportLogbook': {
+                // { object, year? | from?, to?, changes?: true } → CSV
+                const rt = this.findRuntime(msg.object);
+                if (!rt) {
+                    return { error: `Unknown object "${msg.object}"` };
+                }
+                const range = this.yearRange(msg);
+                if (msg.changes) {
+                    const changes =
+                        (await this.store.readJson<TripChange[]>(`${rt.id}/changes-${range.year}.json`)) || [];
+                    return { result: changesCsv(changes, this.systemLanguage) };
+                }
+                const trips = rt.trips.filter(t => t.start >= range.from && t.start < range.to);
+                return { result: logbookCsv(trips, this.csvOptions(rt)) };
+            }
+
+            case 'getChanges': {
+                const rt = this.findRuntime(msg.object);
+                if (!rt) {
+                    return { error: `Unknown object "${msg.object}"` };
+                }
+                const { year } = this.yearRange(msg);
+                return (await this.store.readJson<TripChange[]>(`${rt.id}/changes-${year}.json`)) || [];
             }
 
             case 'endTrip': {
