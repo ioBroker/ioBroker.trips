@@ -36,6 +36,15 @@ import {
     type TripChange,
 } from './lib/logbook';
 import { text } from './lib/texts';
+import type {
+    Diagnostics,
+    DiagnosticsCounts,
+    DiagnosticsObject,
+    DiagnosticsPosition,
+    DiagnosticsSource,
+    DiagnosticsSourceState,
+    SourceStateRole,
+} from './lib/diagnostics';
 
 /** Time based decisions (trip end, live duration) */
 const TICK_MS = 5000;
@@ -77,6 +86,21 @@ interface ObjectRuntime {
     lastCheckpoint: number;
     /** Serializes the asynchronous work of this object (files, states) */
     queue: Promise<void>;
+}
+
+/** A position for the diagnostics */
+function diagnosticsPosition(fix: Fix | null | undefined): DiagnosticsPosition | null {
+    if (!fix) {
+        return null;
+    }
+    return {
+        ts: fix.ts,
+        lat: fix.lat,
+        lon: fix.lon,
+        speed: fix.speed ?? null,
+        accuracy: fix.accuracy ?? null,
+        alt: fix.alt ?? null,
+    };
 }
 
 type StateDefinition = Partial<ioBroker.StateCommon> & { name: string; type: ioBroker.CommonType; role: string };
@@ -372,7 +396,12 @@ export class TripsAdapter extends Adapter {
     }
 
     private onFix(rt: ObjectRuntime, fix: Fix, source: SourceAssembler): void {
-        if (this.unloading || !rt.fusion.accept(source)) {
+        if (this.unloading) {
+            return;
+        }
+        if (!rt.fusion.accept(source)) {
+            // a source with a better priority delivers fresh positions
+            source.count('unused');
             return;
         }
         const now = Date.now();
@@ -381,6 +410,7 @@ export class TripsAdapter extends Adapter {
             fix.ts = now;
         }
         const result = rt.detector.processFix(fix, now);
+        source.count(result);
         if (result !== 'accepted') {
             this.log.debug(`${rt.config.name}: position of ${fix.source} ignored (${result})`);
         } else if (rt.watch.state.active) {
@@ -1148,6 +1178,180 @@ export class TripsAdapter extends Adapter {
     }
 
     /** Summary of the running trip, without addresses and consumption */
+    private diagnostics(object?: unknown): Diagnostics {
+        const now = Date.now();
+        const one = object === undefined || object === null || object === '' ? null : this.findRuntime(object);
+        const runtimes = one ? [one] : Object.values(this.runtimes);
+        const home = (this.config.homePlace || '').trim();
+        return {
+            now,
+            objects: runtimes.map(rt => this.objectDiagnostics(rt, now)),
+            places: this.places.map(place => ({
+                name: place.name,
+                radius: place.radius,
+                privacy: place.privacy,
+                home: place.name === home,
+            })),
+            notificationInstance: this.config.notificationInstance || '',
+            liveInterval: this.liveIntervalMs / 1000,
+        };
+    }
+
+    private objectDiagnostics(rt: ObjectRuntime, now: number): DiagnosticsObject {
+        const sources: DiagnosticsSource[] = rt.sources.map(assembler => {
+            const s = assembler.source;
+            const roles: [SourceStateRole, string, string | undefined][] = [
+                ['position', s.positionId, s.positionFormat],
+                ['latitude', s.latitudeId, undefined],
+                ['longitude', s.longitudeId, undefined],
+                ['speed', s.speedId, s.speedUnit],
+                ['ignition', s.ignitionId, undefined],
+                ['accuracy', s.accuracyId, s.accuracyType === 'hdop' ? 'hdop' : 'meters'],
+                ['altitude', s.altitudeId, undefined],
+                ['timestamp', s.timestampId, undefined],
+                ['alive', s.aliveId || '', undefined],
+            ];
+            const values = assembler.stateValues;
+            const states: DiagnosticsSourceState[] = roles
+                .filter(([, id]) => !!id)
+                .map(([role, id, format]) => {
+                    const state = values[id];
+                    const item: DiagnosticsSourceState = {
+                        role,
+                        id,
+                        val: state ? state.val : null,
+                        ts: state?.ts ?? null,
+                        lc: state?.lc ?? null,
+                    };
+                    if (format) {
+                        item.format = format;
+                    }
+                    return item;
+                });
+            return {
+                label: s.label,
+                type: s.type || 'generic',
+                priority: s.priority,
+                maxAge: s.maxAge / 1000,
+                active: rt.fusion.activeSource === assembler,
+                fresh: !!assembler.lastFix && now - assembler.lastFixAt <= s.maxAge,
+                lastFix: diagnosticsPosition(assembler.lastFix),
+                lastFixAt: assembler.lastFixAt || null,
+                ignition: s.ignitionId ? assembler.ignition : null,
+                ignitionTs: s.ignitionId && assembler.ignitionTs ? assembler.ignitionTs : null,
+                counts: { ...assembler.counts },
+                lastResult: assembler.lastResult as keyof DiagnosticsCounts | null,
+                states,
+            };
+        });
+
+        const st = rt.detector.state;
+        const trip = st.trip;
+        const live = rt.detector.live(now);
+        const d = rt.settings.detector;
+        const watch = rt.watch.state;
+        const meter = rt.meter;
+        const mode = rt.config.consumptionMode;
+        const last = rt.trips[rt.trips.length - 1];
+        const stopped = trip ? trip.stops.reduce((sum, stop) => sum + (stop.end - stop.start), 0) : 0;
+        let phase: DiagnosticsObject['detector']['phase'] = 'parked';
+        if (trip) {
+            phase = 'trip';
+        } else if (st.movingSince !== null) {
+            phase = 'starting';
+        }
+        return {
+            id: rt.id,
+            name: rt.config.name,
+            type: rt.settings.type,
+            distanceUnit: rt.settings.unit,
+            speedUnit: rt.settings.speedUnit,
+            settings: {
+                startSpeed: d.startSpeed,
+                startSeconds: d.startSeconds,
+                startDistance: d.startDistance,
+                stopRadius: d.stopRadius,
+                minStopSeconds: d.minStopSeconds,
+                tripEndSeconds: d.tripEndSeconds,
+                minDistance: d.minDistance,
+                maxAccuracy: d.maxAccuracy,
+                maxSpeed: d.maxSpeed,
+                useIgnition: d.useIgnition,
+            },
+            sources,
+            ignitionSource: rt.fusion.ignition()?.source.source.label ?? null,
+            detector: {
+                phase,
+                ignition: st.ignition,
+                manual: rt.detector.manual,
+                lastFix: diagnosticsPosition(st.lastFix),
+                lastReceived: st.lastReceived || null,
+                speed: live.speed,
+                movingSince: st.movingSince,
+                parked: !trip && st.restAnchor ? { ...st.restAnchor } : null,
+                pending: st.pending.length,
+                suspects: st.suspects.length,
+                trip: trip
+                    ? {
+                          start: trip.start,
+                          last: trip.last,
+                          reason: trip.reason,
+                          distance: trip.distance,
+                          duration: live.duration,
+                          movingTime: Math.max(0, live.duration - stopped),
+                          avgSpeed: live.avgSpeed,
+                          maxSpeed: trip.maxSpeed,
+                          engineTime: trip.engineTime,
+                          engineDistance: trip.engineDistance,
+                          engineKnown: trip.engineKnown,
+                          points: trip.points.length,
+                          stops: trip.stops.length,
+                          gaps: trip.gaps,
+                          lat: live.lat,
+                          lon: live.lon,
+                      }
+                    : null,
+            },
+            watch: {
+                active: watch.active,
+                lat: watch.lat,
+                lon: watch.lon,
+                radius: watch.radius,
+                distance: watch.active ? watch.distance : null,
+                maxDistance: watch.maxDistance,
+                alarm: watch.alarm,
+                signalLost: watch.signalLost,
+                since: watch.since,
+                signalMinutes: rt.settings.watch.signalLostSeconds / 60,
+                auto: !!rt.config.watchAuto,
+            },
+            meter: meter
+                ? {
+                      mode: meter.mode,
+                      stateId: (rt.config.consumptionStateId || '').trim(),
+                      unit: rt.config.consumptionUnit || 'l',
+                      running: meter.running,
+                      used: meter.current(now),
+                      last: meter.state.last,
+                      refills: meter.state.refills,
+                  }
+                : null,
+            estimate:
+                mode === 'distance' || mode === 'hours'
+                    ? { mode, value: configNumber(rt.config.consumption, 0), unit: rt.config.consumptionUnit || 'l' }
+                    : null,
+            trips: {
+                count: rt.trips.length,
+                last: last ? { id: last.id, start: last.start, end: last.end, distance: last.distance } : null,
+            },
+            odometerStart: rt.odometerStart,
+            inputs: [
+                { role: 'odometer' as const, id: rt.config.logbook ? (rt.config.odometerId || '').trim() : '' },
+                { role: 'price' as const, id: this.withConsumption(rt) ? (rt.config.priceStateId || '').trim() : '' },
+            ].filter(input => !!input.id),
+        };
+    }
+
     private currentSummary(rt: ObjectRuntime, trip: ActiveTrip): TripSummary {
         const live = rt.detector.live(Date.now());
         const first = trip.points[0];
@@ -1558,6 +1762,10 @@ export class TripsAdapter extends Adapter {
                     currency: this.config.currency || '€',
                     active: !!rt.detector.trip,
                 }));
+
+            case 'getDiagnostics':
+                // { object? }: what is read from where and what the adapter made of it
+                return this.diagnostics(msg.object);
 
             case 'getTrack': {
                 const rt = this.findRuntime(msg.object);

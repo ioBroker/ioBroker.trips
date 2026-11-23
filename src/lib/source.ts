@@ -1,4 +1,4 @@
-import type { AccuracyType, PositionFormat, SourceConfig, SpeedUnit } from '../types';
+import type { AccuracyType, PositionFormat, SourceConfig, SourceType, SpeedUnit } from '../types';
 import { isValidLatLon, parsePosition, toMs } from './geo';
 import type { Fix } from './tripDetector';
 
@@ -6,6 +6,8 @@ import type { Fix } from './tripDetector';
 export interface ResolvedSource {
     /** Label for logs and the `live.source` state */
     label: string;
+    /** Type of the source in the settings */
+    type?: SourceType;
     object: string;
     priority: number;
     /** ms */
@@ -53,6 +55,7 @@ export async function resolveSource(config: SourceConfig, exists: ObjectExists):
     const maxAge = parseFloat(config.maxAge as string);
     const resolved: ResolvedSource = {
         label: '',
+        type: config.type || 'generic',
         object: (config.object || '').trim(),
         priority: Number.isFinite(priority) ? priority : 1,
         maxAge: (Number.isFinite(maxAge) && maxAge > 0 ? maxAge : 60) * 1000,
@@ -208,6 +211,10 @@ export class SourceAssembler {
     ignition: boolean | null = null;
     /** Time of the last change of the ignition */
     ignitionTs = 0;
+    /** What happened to the positions of this source (accepted, unused, outlier...), for the diagnostics */
+    readonly counts: Record<string, number> = {};
+    /** The result of the last position, a key of `counts` */
+    lastResult: string | null = null;
 
     constructor(
         readonly source: ResolvedSource,
@@ -229,6 +236,21 @@ export class SourceAssembler {
             s.timestampId,
             s.aliveId,
         ].filter((id): id is string => !!id);
+    }
+
+    /** The values read so far, for the diagnostics */
+    get stateValues(): Readonly<Record<string, ioBroker.State>> {
+        return this.values;
+    }
+
+    /**
+     * Counts what happened to a position of this source
+     *
+     * @param result accepted, unused, outlier, ...
+     */
+    count(result: string): void {
+        this.counts[result] = (this.counts[result] || 0) + 1;
+        this.lastResult = result;
     }
 
     /** IDs that trigger a new position */
@@ -377,6 +399,7 @@ export class SourceAssembler {
         const fix = this.buildFix(at);
         // only newer than the last position, the detector ignores older ones
         if (fix && (!this.lastFix || fix.ts > this.lastFix.ts)) {
+            this.counts.confirmed = (this.counts.confirmed || 0) + 1;
             this.lastFix = fix;
             this.lastFixAt = Date.now();
             this.onFix(fix, this);
