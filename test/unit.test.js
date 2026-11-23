@@ -185,6 +185,60 @@ describe('source helpers', () => {
         assert.ok(Math.abs(fixes[0].accuracy - 6) < 1e-9, 'HDOP 1.2 * 5 m');
         assembler.destroy();
     });
+    it('a source that writes the position only after a movement confirms it with the fix quality', async () => {
+        // serial-gps with minDistance: the position of a standing boat is days old, the fix quality comes every 60 s
+        const fixes = [];
+        const source = {
+            label: 'serial-gps.0',
+            object: 'boat',
+            priority: 1,
+            maxAge: 60000,
+            positionFormat: 'latlon',
+            latitudeId: '',
+            longitudeId: '',
+            positionId: 'g.latlon',
+            speedId: 'g.speed',
+            speedUnit: 'km/h',
+            ignitionId: '',
+            accuracyId: '',
+            accuracyType: 'hdop',
+            altitudeId: '',
+            timestampId: 'g.timestamp',
+            aliveId: 'g.fix_quality',
+        };
+        const now = Date.now();
+        const wait = () => new Promise(resolve => setTimeout(resolve, 400));
+        const assembler = new SourceAssembler(source, fix => fixes.push(fix), () => {});
+        assembler.init('g.latlon', { val: '38.69865;20.70798', ts: now - 4 * 86400000, ack: true });
+        assembler.init('g.speed', { val: 0, ts: now, ack: true });
+        assembler.onStateChange('g.timestamp', { val: now - 1000, ts: now, ack: true });
+        assembler.onStateChange('g.fix_quality', { val: 1, ts: now, ack: true });
+        await wait();
+        assert.strictEqual(fixes.length, 1, 'confirmed after the start, without a new position');
+        assert.strictEqual(fixes[0].lat, 38.69865);
+        assert.strictEqual(fixes[0].ts, now - 1000, 'time of the GPS');
+
+        // the boat moves: the timestamp, the fix quality and the position come in the same cycle
+        assembler.onStateChange('g.timestamp', { val: now + 59000, ts: now + 60000, ack: true });
+        assembler.onStateChange('g.fix_quality', { val: 1, ts: now + 60000, ack: true });
+        assembler.onStateChange('g.latlon', { val: '38.69900;20.70798', ts: now + 60000, ack: true });
+        await wait();
+        assert.strictEqual(fixes.length, 2, 'the new position only, no confirmation of the old one');
+        assert.strictEqual(fixes[1].lat, 38.699);
+
+        // no fix: nothing is confirmed
+        assembler.onStateChange('g.timestamp', { val: now + 119000, ts: now + 120000, ack: true });
+        assembler.onStateChange('g.fix_quality', { val: 0, ts: now + 120000, ack: true });
+        await wait();
+        assert.strictEqual(fixes.length, 2);
+
+        // the same time again: not newer, not confirmed
+        assembler.onStateChange('g.fix_quality', { val: 1, ts: now + 125000, ack: true });
+        assembler.onStateChange('g.timestamp', { val: now + 59000, ts: now + 125000, ack: true });
+        await wait();
+        assert.strictEqual(fixes.length, 2);
+        assembler.destroy();
+    });
     it('fusion prefers the better priority while it is fresh', () => {
         const make = (priority, accuracy) => ({
             source: { priority, maxAge: 60000 },

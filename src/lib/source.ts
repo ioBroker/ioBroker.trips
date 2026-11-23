@@ -21,6 +21,12 @@ export interface ResolvedSource {
     accuracyType: AccuracyType;
     altitudeId: string;
     timestampId: string;
+    /**
+     * Optional state that confirms the last position while it is not written again: some sources write the position
+     * only after a movement (serial-gps: `minDistance`), a standing object would look like without signal. A value
+     * > 0 or `true` (e.g. the fix quality) is a position at the last place with the new time.
+     */
+    aliveId?: string;
 }
 
 /** Typical error of a GPS position per HDOP unit in meters */
@@ -97,6 +103,8 @@ export async function resolveSource(config: SourceConfig, exists: ObjectExists):
             resolved.accuracyType = 'hdop';
             resolved.altitudeId = `${base}.gps.altitude`;
             resolved.timestampId = `${base}.gps.timestamp`;
+            // the position is written only after moving `minDistance`, the fix quality at least every 60 s (0 = no fix)
+            resolved.aliveId = `${base}.gps.fix_quality`;
             resolved.label = base;
             break;
         }
@@ -193,6 +201,7 @@ export function parseTimestamp(value: unknown): number | null {
 export class SourceAssembler {
     private values: Record<string, ioBroker.State> = {};
     private timer: ReturnType<typeof setTimeout> | null = null;
+    private aliveTimer: ReturnType<typeof setTimeout> | null = null;
     /** Wall clock of the last position */
     lastFixAt = 0;
     lastFix: Fix | null = null;
@@ -218,7 +227,8 @@ export class SourceAssembler {
             s.accuracyId,
             s.altitudeId,
             s.timestampId,
-        ].filter(id => !!id);
+            s.aliveId,
+        ].filter((id): id is string => !!id);
     }
 
     /** IDs that trigger a new position */
@@ -255,6 +265,13 @@ export class SourceAssembler {
                 this.onIgnition(on, this.ignitionTs, this);
             }
         }
+        if (id === this.source.aliveId && parseIgnition(state.val)) {
+            // after a moment, so that a new position written in the same cycle wins
+            this.aliveTimer ||= setTimeout(() => {
+                this.aliveTimer = null;
+                this.confirm(state.ts || Date.now());
+            }, ASSEMBLE_MS);
+        }
         if (this.isPositionId(id)) {
             // A position written again with the same value and time stamp (e.g. after a reconnect) is no news
             if (previous && previous.val === state.val && previous.ts === state.ts) {
@@ -272,8 +289,12 @@ export class SourceAssembler {
         }
     }
 
-    /** Builds the position from the collected values */
-    buildFix(): Fix | null {
+    /**
+     * Builds the position from the collected values
+     *
+     * @param at time of a confirmation of the last position instead of the time of the position state
+     */
+    buildFix(at?: number): Fix | null {
         const s = this.source;
         let lat: number | null = null;
         let lon: number | null = null;
@@ -285,7 +306,7 @@ export class SourceAssembler {
             const lonState = this.values[s.longitudeId];
             lat = toNumber(latState?.val);
             lon = toNumber(lonState?.val);
-            ts = Math.max(latState?.ts || 0, lonState?.ts || 0);
+            ts = at ?? Math.max(latState?.ts || 0, lonState?.ts || 0);
         } else {
             const posState = this.values[s.positionId];
             const parsed = parsePosition(posState?.val, s.positionFormat);
@@ -295,7 +316,7 @@ export class SourceAssembler {
                 accuracy = parsed.accuracy ?? null;
                 alt = parsed.alt ?? null;
             }
-            ts = posState?.ts || 0;
+            ts = at ?? (posState?.ts || 0);
         }
         if (!isValidLatLon(lat, lon)) {
             return null;
@@ -333,8 +354,29 @@ export class SourceAssembler {
     }
 
     private emit(): void {
+        if (this.aliveTimer) {
+            // a new position: no confirmation of the old one
+            clearTimeout(this.aliveTimer);
+            this.aliveTimer = null;
+        }
         const fix = this.buildFix();
         if (fix) {
+            this.lastFix = fix;
+            this.lastFixAt = Date.now();
+            this.onFix(fix, this);
+        }
+    }
+
+    /**
+     * The source confirms that the object is still at the last position (it writes positions only after a movement)
+     *
+     * @param at time of the confirmation
+     */
+    private confirm(at: number): void {
+        // also the position read at the start: a standing object does not get a new one
+        const fix = this.buildFix(at);
+        // only newer than the last position, the detector ignores older ones
+        if (fix && (!this.lastFix || fix.ts > this.lastFix.ts)) {
             this.lastFix = fix;
             this.lastFixAt = Date.now();
             this.onFix(fix, this);
@@ -345,6 +387,10 @@ export class SourceAssembler {
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;
+        }
+        if (this.aliveTimer) {
+            clearTimeout(this.aliveTimer);
+            this.aliveTimer = null;
         }
     }
 }

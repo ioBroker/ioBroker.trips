@@ -20,7 +20,9 @@ boats, and an anchor watch that also works as a theft watch for cars.
 
 1. **Sources**: each object gets one or more sources. Supported:
     - `ioBroker.nmea` - position, SOG, HDOP, altitude and the engine RPM (as engine on/off)
-    - `ioBroker.serial-gps` - position, speed, HDOP, altitude, time of the fix
+    - `ioBroker.serial-gps` - position, speed, HDOP, altitude, time of the fix. With `minDistance` it writes the
+      position only after a movement: the fix quality confirms the position of a standing receiver, so the anchor
+      watch does not take it for a lost signal
     - Teltonika routers (RUT/RUTX) via `ioBroker.teltonika` with the GPS enabled
     - Generic: two states latitude/longitude, or one state `lat;lon`, `lon;lat` or JSON
       (`{"lat":..,"lon":..}`, `{"latitude":..,"longitude":..}`, GeoJSON point). This way any tracker works,
