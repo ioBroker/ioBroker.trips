@@ -1,0 +1,126 @@
+{
+  "common": {
+    "name": "trips",
+    "version": "0.0.1",
+    "news": {
+      "0.0.1": {
+        "en": "initial release",
+        "de": "Erstveröffentlichung",
+        "ru": "первый выпуск",
+        "pt": "lançamento inicial",
+        "nl": "eerste uitgave",
+        "fr": "première version",
+        "it": "prima versione",
+        "es": "versión inicial",
+        "pl": "pierwsze wydanie",
+        "uk": "перший випуск",
+        "zh-cn": "首次发布"
+      }
+    },
+    "titleLang": {
+      "en": "Trips",
+      "de": "Fahrten",
+      "ru": "Поездки",
+      "pt": "Viagens",
+      "nl": "Ritten",
+      "fr": "Trajets",
+      "it": "Viaggi",
+      "es": "Viajes",
+      "pl": "Podróże",
+      "uk": "Поїздки",
+      "zh-cn": "行程"
+    },
+    "desc": {
+      "en": "Detects trips of cars, boats and persons from GPS sources (NMEA, serial GPS, Teltonika, any states) and calculates statistics, consumption and GPX exports",
+      "de": "Erkennt Fahrten von Autos, Booten und Personen aus GPS-Quellen (NMEA, serielles GPS, Teltonika, beliebige Datenpunkte) und berechnet Statistiken, Verbrauch und GPX-Exporte",
+      "ru": "Распознаёт поездки автомобилей, лодок и людей по GPS-источникам (NMEA, последовательный GPS, Teltonika, любые состояния) и рассчитывает статистику, расход и экспорт в GPX",
+      "pt": "Detecta viagens de carros, barcos e pessoas a partir de fontes GPS (NMEA, GPS serial, Teltonika, quaisquer estados) e calcula estatísticas, consumo e exportações GPX",
+      "nl": "Herkent ritten van auto's, boten en personen uit GPS-bronnen (NMEA, seriële GPS, Teltonika, willekeurige states) en berekent statistieken, verbruik en GPX-exports",
+      "fr": "Détecte les trajets de voitures, bateaux et personnes à partir de sources GPS (NMEA, GPS série, Teltonika, états quelconques) et calcule statistiques, consommation et exports GPX",
+      "it": "Rileva i viaggi di auto, barche e persone da fonti GPS (NMEA, GPS seriale, Teltonika, stati qualsiasi) e calcola statistiche, consumi ed esportazioni GPX",
+      "es": "Detecta viajes de coches, barcos y personas a partir de fuentes GPS (NMEA, GPS serie, Teltonika, estados cualesquiera) y calcula estadísticas, consumo y exportaciones GPX",
+      "pl": "Wykrywa podróże samochodów, łodzi i osób ze źródeł GPS (NMEA, GPS szeregowy, Teltonika, dowolne stany) i oblicza statystyki, zużycie oraz eksport GPX",
+      "uk": "Розпізнає поїздки автомобілів, човнів і людей за GPS-джерелами (NMEA, послідовний GPS, Teltonika, будь-які стани) і розраховує статистику, витрату та експорт у GPX",
+      "zh-cn": "从 GPS 数据源（NMEA、串口 GPS、Teltonika、任意状态）识别汽车、船只和人员的行程，并计算统计数据、能耗和 GPX 导出"
+    },
+    "authors": [
+      "bluefox <dogafox@gmail.com>"
+    ],
+    "keywords": [
+      "gps",
+      "trips",
+      "logbook",
+      "statistics",
+      "nmea",
+      "gpx"
+    ],
+    "licenseInformation": {
+      "license": "MIT",
+      "type": "free",
+      "link": "https://github.com/ioBroker/ioBroker.trips/blob/main/LICENSE"
+    },
+    "platform": "Javascript/Node.js",
+    "icon": "trips.svg",
+    "enabled": true,
+    "extIcon": "https://raw.githubusercontent.com/ioBroker/ioBroker.trips/main/admin/trips.svg",
+    "readme": "https://github.com/ioBroker/ioBroker.trips/blob/main/README.md",
+    "loglevel": "info",
+    "tier": 3,
+    "mode": "daemon",
+    "type": "geoposition",
+    "compact": true,
+    "connectionType": "local",
+    "dataSource": "push",
+    "messagebox": true,
+    "adminUI": {
+      "config": "json"
+    },
+    "dependencies": [
+      {
+        "js-controller": ">=6.0.11"
+      }
+    ],
+    "globalDependencies": [
+      {
+        "admin": ">=7.6.17"
+      }
+    ]
+  },
+  "native": {
+    "objects": [],
+    "sources": [],
+    "places": [],
+    "homePlace": "",
+    "currency": "€",
+    "geocoding": false,
+    "notificationInstance": "",
+    "notificationUser": "",
+    "notificationMinDistance": 0,
+    "retentionDays": 0,
+    "liveInterval": 5
+  },
+  "objects": [],
+  "instanceObjects": [
+    {
+      "_id": "",
+      "type": "meta",
+      "common": {
+        "name": {
+          "en": "Trips and tracks",
+          "de": "Fahrten und Tracks",
+          "ru": "Поездки и треки",
+          "pt": "Viagens e trajetos",
+          "nl": "Ritten en tracks",
+          "fr": "Trajets et traces",
+          "it": "Viaggi e tracce",
+          "es": "Viajes y recorridos",
+          "pl": "Podróże i ślady",
+          "uk": "Поїздки та треки",
+          "zh-cn": "行程和轨迹"
+        },
+        "type": "meta.user"
+      },
+      "native": {}
+    }
+  ]
+}

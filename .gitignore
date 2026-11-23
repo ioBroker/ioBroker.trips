@@ -1,0 +1,15 @@
+node_modules
+.idea
+tmp
+.DS_store
+iob_npm.done
+admin/i18n/flat.txt
+admin/i18n/*/flat.txt
+/build
+
+.dev-server
+.vscode
+
+#ignore .commitinfo created by ioBroker release script
+.commitinfo
+/*.tgz

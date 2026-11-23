@@ -1,0 +1,71 @@
+{
+  "name": "iobroker.trips",
+  "version": "0.0.1",
+  "description": "Detects trips of cars, boats and persons from GPS sources and calculates statistics, consumption and exports",
+  "author": {
+    "name": "bluefox",
+    "email": "dogafox@gmail.com"
+  },
+  "homepage": "https://github.com/ioBroker/ioBroker.trips",
+  "keywords": [
+    "ioBroker",
+    "gps",
+    "trips",
+    "logbook",
+    "statistics",
+    "nmea",
+    "gpx"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ioBroker/ioBroker.trips"
+  },
+  "dependencies": {
+    "@iobroker/adapter-core": "^3.4.3"
+  },
+  "devDependencies": {
+    "@alcalzone/release-script": "^5.2.1",
+    "@alcalzone/release-script-plugin-iobroker": "^5.2.0",
+    "@alcalzone/release-script-plugin-license": "^5.2.2",
+    "@iobroker/adapter-dev": "^1.5.0",
+    "@iobroker/build-tools": "^3.0.3",
+    "@iobroker/eslint-config": "^2.3.4",
+    "@iobroker/legacy-testing": "^4.0.1",
+    "@iobroker/testing": "^6.3.1",
+    "@iobroker/types": "^7.2.5",
+    "@tsconfig/node22": "^22.0.6",
+    "@types/node": "^22.20.5",
+    "mocha": "^11.7.5",
+    "typescript": "~6.0.3"
+  },
+  "bugs": {
+    "url": "https://github.com/ioBroker/ioBroker.trips/issues"
+  },
+  "main": "build/main.js",
+  "files": [
+    "admin/",
+    "build/",
+    "io-package.json",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepublishOnly": "npm run build",
+    "test:unit": "mocha test/unit.test.js --exit",
+    "test:integration": "mocha test/adapter.test.js --exit",
+    "test:package": "mocha test/package.test.js --exit",
+    "test": "npm run test:unit && npm run test:integration",
+    "lint": "eslint -c eslint.config.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "release": "release-script",
+    "release-patch": "release-script patch --yes",
+    "release-minor": "release-script minor --yes",
+    "release-major": "release-script major --yes",
+    "update-packages": "npx -y npm-check-updates --upgrade",
+    "translate": "translate-adapter"
+  },
+  "license": "MIT",
+  "readmeFilename": "README.md"
+}

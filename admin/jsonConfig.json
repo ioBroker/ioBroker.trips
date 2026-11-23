@@ -1,0 +1,778 @@
+{
+    "i18n": true,
+    "type": "tabs",
+    "items": {
+        "_objects": {
+            "type": "panel",
+            "label": "Objects",
+            "items": {
+                "_objectsInfo": {
+                    "type": "staticText",
+                    "text": "An object is a car, a boat or a person. Its positions come from the sources on the next tab.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                },
+                "objects": {
+                    "type": "accordion",
+                    "titleAttr": "name",
+                    "clone": "name",
+                    "newLine": true,
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12,
+                    "items": [
+                        {
+                            "type": "checkbox",
+                            "attr": "enabled",
+                            "label": "Enabled",
+                            "default": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 2,
+                            "xl": 2
+                        },
+                        {
+                            "type": "text",
+                            "attr": "name",
+                            "label": "Name",
+                            "default": "",
+                            "validator": "!!data.name && data.name.trim() !== ''",
+                            "validatorErrorText": "The name is required",
+                            "validatorNoSaveOnError": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "select",
+                            "attr": "type",
+                            "label": "Type",
+                            "default": "car",
+                            "options": [
+                                { "label": "Car", "value": "car" },
+                                { "label": "Boat", "value": "boat" },
+                                { "label": "Person / phone", "value": "person" },
+                                { "label": "Other", "value": "other" }
+                            ],
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "select",
+                            "attr": "distanceUnit",
+                            "label": "Distance unit",
+                            "default": "",
+                            "options": [
+                                { "label": "Default of the type", "value": "" },
+                                { "label": "Kilometers", "value": "km" },
+                                { "label": "Nautical miles", "value": "nm" },
+                                { "label": "Miles", "value": "mi" }
+                            ],
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "checkbox",
+                            "attr": "useIgnition",
+                            "label": "Trips with the ignition",
+                            "help": "With an ignition state in a source, trips start with the ignition on and end with the ignition off. Without it the movement decides",
+                            "default": true,
+                            "hidden": "data.type !== 'car'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "header",
+                            "text": "Trip detection",
+                            "size": 5,
+                            "newLine": true
+                        },
+                        {
+                            "type": "staticText",
+                            "text": "Empty fields use the defaults of the type. The speeds are in the unit of the object: km/h, kn or mph.",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 12,
+                            "lg": 12,
+                            "xl": 12
+                        },
+                        {
+                            "type": "number",
+                            "attr": "startSpeed",
+                            "label": "Start speed",
+                            "help": "Default: car 8 km/h, boat 1.5 kn, person 3 km/h",
+                            "min": 0,
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "tripEndMinutes",
+                            "label": "Trip end after",
+                            "unit": "min",
+                            "help": "Standing or no positions this long ends the trip. Default: car 5, boat 30, person 10",
+                            "min": 1,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "minStopSeconds",
+                            "label": "Min. stop duration",
+                            "unit": "s",
+                            "help": "Standing this long is a stop inside the trip. Default: car 120, boat and person 300",
+                            "min": 0,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "startSeconds",
+                            "label": "Start time",
+                            "unit": "s",
+                            "help": "The speed must stay this long above the start speed. Default: car 20, boat and person 60",
+                            "min": 0,
+                            "expertMode": true,
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "startDistance",
+                            "label": "Start distance",
+                            "unit": "m",
+                            "help": "Moving this far from the parking position starts a trip, also with rare positions. Default 200, person 250",
+                            "min": 10,
+                            "expertMode": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "stopRadius",
+                            "label": "Stop radius",
+                            "unit": "m",
+                            "help": "Positions inside this radius count as standing. Default: car 50, boat 100, person 75",
+                            "min": 5,
+                            "expertMode": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "minDistance",
+                            "label": "Min. distance",
+                            "unit": "m",
+                            "help": "Smaller movements are GPS jitter. Default: car 15, boat 10, person 20",
+                            "min": 0,
+                            "expertMode": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "maxAccuracy",
+                            "label": "Max. inaccuracy",
+                            "unit": "m",
+                            "help": "Positions with a worse accuracy are ignored. Default 50, person 100",
+                            "min": 1,
+                            "expertMode": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "maxSpeed",
+                            "label": "Max. plausible speed",
+                            "help": "Faster jumps are outliers. Default: car 300 km/h, boat 60 kn, person 1000 km/h",
+                            "min": 1,
+                            "expertMode": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "header",
+                            "text": "Consumption",
+                            "size": 5,
+                            "newLine": true
+                        },
+                        {
+                            "type": "select",
+                            "attr": "consumptionMode",
+                            "label": "Consumption",
+                            "default": "none",
+                            "options": [
+                                { "label": "None", "value": "none" },
+                                { "label": "Per 100 distance units", "value": "distance" },
+                                { "label": "Per engine hour", "value": "hours" }
+                            ],
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "consumption",
+                            "label": "Consumption value",
+                            "help": "e.g. 6.5 per 100 km or 2.5 per engine hour",
+                            "min": 0,
+                            "step": 0.1,
+                            "hidden": "!data.consumptionMode || data.consumptionMode === 'none'",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "select",
+                            "attr": "consumptionUnit",
+                            "label": "Unit",
+                            "default": "l",
+                            "options": [
+                                { "label": "Liters", "value": "l" },
+                                { "label": "kWh", "value": "kWh" }
+                            ],
+                            "hidden": "!data.consumptionMode || data.consumptionMode === 'none'",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "price",
+                            "label": "Price per unit",
+                            "min": 0,
+                            "step": 0.01,
+                            "hidden": "!data.consumptionMode || data.consumptionMode === 'none'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "priceStateId",
+                            "label": "Price state",
+                            "help": "Optional, e.g. the price from tankerkoenig or tibber. Wins over the fixed price",
+                            "hidden": "!data.consumptionMode || data.consumptionMode === 'none'",
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 8,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "number",
+                            "attr": "co2PerUnit",
+                            "label": "CO₂ per unit (kg)",
+                            "help": "Empty: 2.37 per liter (petrol), 0.38 per kWh. Diesel: 2.65",
+                            "min": 0,
+                            "step": 0.01,
+                            "hidden": "!data.consumptionMode || data.consumptionMode === 'none'",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "checkbox",
+                            "attr": "notify",
+                            "label": "Send a summary after each trip",
+                            "help": "The messenger is set on the tab Notifications",
+                            "default": false,
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        }
+                    ]
+                }
+            }
+        },
+        "_sources": {
+            "type": "panel",
+            "label": "Sources",
+            "items": {
+                "_sourcesInfo": {
+                    "type": "staticText",
+                    "text": "An object can have several sources. As long as the source with the best priority (1) delivers fresh positions, the others are ignored.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                },
+                "sources": {
+                    "type": "accordion",
+                    "titleAttr": "object",
+                    "clone": true,
+                    "newLine": true,
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12,
+                    "items": [
+                        {
+                            "type": "checkbox",
+                            "attr": "enabled",
+                            "label": "Enabled",
+                            "default": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 2,
+                            "xl": 2
+                        },
+                        {
+                            "type": "autocompleteSendTo",
+                            "attr": "object",
+                            "label": "Object",
+                            "command": "getObjectNames",
+                            "freeSolo": true,
+                            "noTranslation": true,
+                            "help": "Name of the object from the tab Objects",
+                            "default": "",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "select",
+                            "attr": "type",
+                            "label": "Source type",
+                            "default": "generic",
+                            "options": [
+                                { "label": "Generic states", "value": "generic" },
+                                { "label": "ioBroker.nmea", "value": "nmea" },
+                                { "label": "ioBroker.serial-gps", "value": "serial-gps" },
+                                { "label": "Teltonika router (ioBroker.teltonika)", "value": "teltonika" }
+                            ],
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "number",
+                            "attr": "priority",
+                            "label": "Priority",
+                            "help": "1 is the best",
+                            "default": 1,
+                            "min": 1,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 2,
+                            "xl": 2
+                        },
+                        {
+                            "type": "instance",
+                            "attr": "baseId",
+                            "label": "Instance",
+                            "adapter": "nmea",
+                            "hidden": "data.type !== 'nmea'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "instance",
+                            "attr": "baseId",
+                            "label": "Instance",
+                            "adapter": "serial-gps",
+                            "hidden": "data.type !== 'serial-gps'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "baseId",
+                            "label": "Router",
+                            "help": "The channel of the router, e.g. teltonika.0.1234567890. The GPS must be enabled in the teltonika adapter",
+                            "types": "channel",
+                            "root": "teltonika",
+                            "hidden": "data.type !== 'teltonika'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 8,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "select",
+                            "attr": "positionFormat",
+                            "label": "Position format",
+                            "default": "separate",
+                            "options": [
+                                { "label": "Latitude and longitude in two states", "value": "separate" },
+                                { "label": "One state lat;lon", "value": "latlon" },
+                                { "label": "One state lon;lat", "value": "lonlat" },
+                                { "label": "One state with JSON", "value": "json" }
+                            ],
+                            "hidden": "data.type && data.type !== 'generic'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 4,
+                            "xl": 4
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "latitudeId",
+                            "label": "Latitude",
+                            "hidden": "(data.type && data.type !== 'generic') || (data.positionFormat && data.positionFormat !== 'separate')",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "longitudeId",
+                            "label": "Longitude",
+                            "hidden": "(data.type && data.type !== 'generic') || (data.positionFormat && data.positionFormat !== 'separate')",
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "positionId",
+                            "label": "Position",
+                            "hidden": "(data.type && data.type !== 'generic') || !data.positionFormat || data.positionFormat === 'separate'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "speedId",
+                            "label": "Speed",
+                            "help": "Optional. A speed of the receiver is better than the one from the positions",
+                            "hidden": "data.type === 'serial-gps'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "select",
+                            "attr": "speedUnit",
+                            "label": "Speed unit",
+                            "default": "km/h",
+                            "noTranslation": true,
+                            "options": [
+                                { "label": "km/h", "value": "km/h" },
+                                { "label": "kn", "value": "kn" },
+                                { "label": "m/s", "value": "m/s" },
+                                { "label": "mph", "value": "mph" }
+                            ],
+                            "hidden": "data.type === 'serial-gps' || (data.type === 'nmea' && !data.speedId)",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 2,
+                            "xl": 2
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "ignitionId",
+                            "label": "Ignition / engine",
+                            "help": "Optional. Boolean or number (e.g. RPM), > 0 is on. NMEA: the engine RPM is used, if empty",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "accuracyId",
+                            "label": "Accuracy",
+                            "help": "Optional",
+                            "hidden": "data.type && data.type !== 'generic'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "select",
+                            "attr": "accuracyType",
+                            "label": "Accuracy type",
+                            "default": "meters",
+                            "options": [
+                                { "label": "Meters", "value": "meters" },
+                                { "label": "HDOP", "value": "hdop" }
+                            ],
+                            "hidden": "(data.type && data.type !== 'generic') || !data.accuracyId",
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 3,
+                            "lg": 2,
+                            "xl": 2
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "altitudeId",
+                            "label": "Altitude",
+                            "help": "Optional, in meters",
+                            "hidden": "data.type && data.type !== 'generic'",
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "objectId",
+                            "attr": "timestampId",
+                            "label": "Time of the position",
+                            "help": "Optional. Otherwise the time stamp of the state is used",
+                            "hidden": "data.type && data.type !== 'generic'",
+                            "xs": 12,
+                            "sm": 12,
+                            "md": 6,
+                            "lg": 6,
+                            "xl": 6
+                        },
+                        {
+                            "type": "number",
+                            "attr": "maxAge",
+                            "label": "Max. age",
+                            "unit": "s",
+                            "help": "With several sources: older positions of this source let the next source take over",
+                            "default": 60,
+                            "min": 1,
+                            "newLine": true,
+                            "xs": 12,
+                            "sm": 6,
+                            "md": 4,
+                            "lg": 3,
+                            "xl": 3
+                        }
+                    ]
+                }
+            }
+        },
+        "_places": {
+            "type": "panel",
+            "label": "Places",
+            "items": {
+                "_placesInfo": {
+                    "type": "staticText",
+                    "text": "Trips get the name of the place where they start and end. Positions inside a privacy zone are not stored.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                },
+                "places": {
+                    "type": "table",
+                    "newLine": true,
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12,
+                    "uniqueColumns": ["name"],
+                    "items": [
+                        { "type": "text", "attr": "name", "title": "Name", "width": "30%", "default": "" },
+                        { "type": "number", "attr": "latitude", "title": "Latitude", "width": "20%", "min": -90, "max": 90 },
+                        { "type": "number", "attr": "longitude", "title": "Longitude", "width": "20%", "min": -180, "max": 180 },
+                        { "type": "number", "attr": "radius", "title": "Radius (m)", "width": "15%", "min": 10, "default": 100 },
+                        { "type": "checkbox", "attr": "privacy", "title": "Privacy zone", "width": "15%", "default": false }
+                    ]
+                },
+                "homePlace": {
+                    "type": "autocompleteSendTo",
+                    "label": "Home place",
+                    "help": "Place for the live distance to home",
+                    "command": "getPlaceNames",
+                    "freeSolo": true,
+                    "noTranslation": true,
+                    "newLine": true,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 3,
+                    "xl": 3
+                },
+                "geocoding": {
+                    "type": "checkbox",
+                    "label": "Reverse geocoding (OpenStreetMap Nominatim)",
+                    "help": "Start and destination outside of the places get an address. The positions are sent to openstreetmap.org, never the ones in privacy zones",
+                    "newLine": true,
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 8,
+                    "lg": 6,
+                    "xl": 6
+                }
+            }
+        },
+        "_general": {
+            "type": "panel",
+            "label": "Notifications and storage",
+            "items": {
+                "notificationInstance": {
+                    "type": "instance",
+                    "label": "Messenger",
+                    "help": "Sends the summary of each trip",
+                    "adapter": "",
+                    "adapters": ["telegram", "pushover", "email", "whatsapp-cmb", "signal-cmb"],
+                    "allowDeactivate": true,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 3,
+                    "xl": 3
+                },
+                "notificationUser": {
+                    "type": "text",
+                    "label": "Recipient",
+                    "help": "Optional: user (telegram), device (pushover), address (email) or phone number",
+                    "hidden": "!data.notificationInstance",
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 3,
+                    "xl": 3
+                },
+                "notificationMinDistance": {
+                    "type": "number",
+                    "label": "Min. distance for a message",
+                    "help": "In the distance unit of the object",
+                    "min": 0,
+                    "hidden": "!data.notificationInstance",
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 3,
+                    "xl": 3
+                },
+                "currency": {
+                    "type": "text",
+                    "label": "Currency",
+                    "newLine": true,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 3,
+                    "xl": 3
+                },
+                "retentionDays": {
+                    "type": "number",
+                    "label": "Delete tracks after",
+                    "unit": "days",
+                    "help": "0 - keep forever. Distances and durations stay, the tracks and coordinates are deleted",
+                    "min": 0,
+                    "newLine": true,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 3,
+                    "xl": 3
+                },
+                "liveInterval": {
+                    "type": "number",
+                    "label": "Live update interval",
+                    "unit": "s",
+                    "help": "How often the live states are written during a trip",
+                    "min": 1,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 3,
+                    "xl": 3
+                }
+            }
+        }
+    }
+}
