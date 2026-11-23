@@ -3,8 +3,9 @@
  *
  * The messages are answered by `handleMessage()` of the adapter (`src/main.ts`):
  * - `getObjects` → `[{ name, id, type, distanceUnit, speedUnit, consumptionUnit, currency, active }]`
- * - `getTrips` `{ object, limit }` → the summaries, newest first, or `{ error }`
+ * - `getTrips` `{ object, limit, to? }` → the summaries, newest first (started before `to`), or `{ error }`
  * - `getTrack` `{ object, id, format: 'geojson' }` → `{ result: <GeoJSON text> }` or `{ error }`
+ * - `getDiagnostics` `{ object? }` → `Diagnostics` of `src/lib/diagnostics.ts`
  */
 import type { WebComponentSocket } from '@iobroker/web-components';
 
@@ -64,6 +65,14 @@ export interface TripSummary {
     consumptionUnit?: string;
     cost?: number;
     currency?: string;
+    /** The consumption was measured, not estimated */
+    measured?: boolean;
+    /** Seconds with ignition/engine on */
+    engineTime?: number;
+    /** Boats with a known engine state: meters with the engine on */
+    engineDistance?: number;
+    /** Boats with a known engine state: meters under sail */
+    sailDistance?: number;
     /** The track file exists */
     track: boolean;
 }
@@ -156,15 +165,37 @@ export function findObject(objects: TripObject[], wanted: string): TripObject | 
  * @param instance e.g. `trips.0`
  * @param object the ID of the object
  * @param limit how many
+ * @param to only trips that started before this time (the next page: the start of the oldest trip so far)
  */
 export async function loadTrips(
     socket: WebComponentSocket,
     instance: string,
     object: string,
     limit: number,
+    to?: number,
 ): Promise<TripSummary[]> {
-    const answer = await ask<unknown>(socket, instance, 'getTrips', { object, limit });
+    const answer = await ask<unknown>(
+        socket,
+        instance,
+        'getTrips',
+        to === undefined ? { object, limit } : { object, limit, to },
+    );
     return Array.isArray(answer) ? (answer as TripSummary[]) : [];
+}
+
+/**
+ * What the adapter reads and what it made of it (`getDiagnostics`)
+ *
+ * @param socket the connection of the host
+ * @param instance e.g. `trips.0`
+ * @param object the ID of one object, empty for all
+ */
+export async function loadDiagnostics<T>(socket: WebComponentSocket, instance: string, object: string): Promise<T> {
+    const answer = await ask<T>(socket, instance, 'getDiagnostics', object ? { object } : {});
+    if (!answer || typeof answer !== 'object' || !Array.isArray((answer as { objects?: unknown }).objects)) {
+        throw new Error(`getDiagnostics: no answer of ${instance}`);
+    }
+    return answer;
 }
 
 /**
@@ -336,11 +367,13 @@ export function formatMoney(value: number, currency: string | undefined, lang: s
     return `${formatNumber(value, 2, lang)}${currency ? ` ${currency}` : ''}`;
 }
 
-function formatUnit(value: number, unit: 'hour' | 'minute' | 'second', lang: string): string {
+const UNIT_FALLBACK = { day: 'd', hour: 'h', minute: 'min', second: 's' } as const;
+
+function formatUnit(value: number, unit: 'day' | 'hour' | 'minute' | 'second', lang: string): string {
     try {
         return new Intl.NumberFormat(intlLang(lang), { style: 'unit', unit, unitDisplay: 'short' }).format(value);
     } catch {
-        return `${value} ${unit === 'hour' ? 'h' : unit === 'minute' ? 'min' : 's'}`;
+        return `${value} ${UNIT_FALLBACK[unit]}`;
     }
 }
 
@@ -411,4 +444,48 @@ export function formatMoment(ts: number, lang: string): string {
 /** `Home → Office`, `… → Office`; empty if neither is known */
 export function formatRoute(from: string | undefined, to: string | undefined): string {
     return from || to ? `${from || '…'} → ${to || '…'}` : '';
+}
+
+/** `November 2026` */
+export function formatMonth(ts: number, lang: string): string {
+    return new Date(ts).toLocaleDateString(intlLang(lang), { month: 'long', year: 'numeric' });
+}
+
+/** The start of the day of a time, local */
+export function dayOf(ts: number): number {
+    return startOfDay(ts);
+}
+
+/**
+ * How long ago: `3 s`, `12 min`, `5 h`, `3 d` - compact, for tables
+ *
+ * @param ms the age in ms; negative (clocks) counts as 0
+ * @param lang the language of the system
+ */
+export function formatAge(ms: number, lang: string): string {
+    const seconds = Math.max(0, Math.round(ms / 1000));
+    if (seconds < 120) {
+        return formatUnit(seconds, 'second', lang);
+    }
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 120) {
+        return formatUnit(minutes, 'minute', lang);
+    }
+    const hours = Math.round(minutes / 60);
+    if (hours < 48) {
+        return formatUnit(hours, 'hour', lang);
+    }
+    return formatUnit(Math.round(hours / 24), 'day', lang);
+}
+
+/** `54.32900, 10.15000` */
+export function formatCoordinates(
+    lat: number | null | undefined,
+    lon: number | null | undefined,
+    lang: string,
+): string {
+    if (!isNumber(lat) || !isNumber(lon)) {
+        return '—';
+    }
+    return `${formatNumber(lat, 5, lang)}, ${formatNumber(lon, 5, lang)}`;
 }

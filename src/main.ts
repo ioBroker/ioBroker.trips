@@ -1720,11 +1720,14 @@ export class TripsAdapter extends Adapter {
 
     private async handleMessage(command: string, msg: Record<string, any>, from: string): Promise<unknown> {
         switch (command) {
-            case 'getObjectNames':
-                // the settings list all objects, the widgets (`enabled: true`) only the running ones
-                return (this.config.objects || [])
+            case 'getObjectNames': {
+                // the settings list all objects, the widgets (`enabled: true`) only the running ones;
+                // `empty: true` offers "none" too (widgets: all objects or a choice in the widget)
+                const names = (this.config.objects || [])
                     .filter(o => o?.name?.trim() && (!msg.enabled || o.enabled))
                     .map(o => ({ label: o.name, value: o.name }));
+                return msg.empty ? [{ label: '---', value: '' }, ...names] : names;
+            }
 
             case 'getPlaceNames':
                 return [
@@ -1763,9 +1766,14 @@ export class TripsAdapter extends Adapter {
                     active: !!rt.detector.trip,
                 }));
 
-            case 'getDiagnostics':
+            case 'getDiagnostics': {
                 // { object? }: what is read from where and what the adapter made of it
-                return this.diagnostics(msg.object);
+                const wanted = msg.object === undefined || msg.object === null ? '' : String(msg.object).trim();
+                if (wanted && !this.findRuntime(wanted)) {
+                    return { error: `Unknown object "${wanted}"` };
+                }
+                return this.diagnostics(wanted);
+            }
 
             case 'getTrack': {
                 const rt = this.findRuntime(msg.object);

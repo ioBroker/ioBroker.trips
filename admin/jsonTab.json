@@ -1,0 +1,44 @@
+{
+    "i18n": true,
+    "type": "tabs",
+    "items": {
+        "_trips": {
+            "type": "panel",
+            "label": "Trips",
+            "items": {
+                "_browser": {
+                    "type": "custom",
+                    "webComponent": "webcomponents/trips-browser.json",
+                    "settings": {
+                        "instance": "trips.${_instance}"
+                    },
+                    "height": "calc(100vh - 160px)",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                }
+            }
+        },
+        "_diagnostics": {
+            "type": "panel",
+            "label": "Diagnostics",
+            "items": {
+                "_diagnostics": {
+                    "type": "custom",
+                    "webComponent": "webcomponents/trips-diagnostics.json",
+                    "settings": {
+                        "instance": "trips.${_instance}"
+                    },
+                    "height": "calc(100vh - 160px)",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                }
+            }
+        }
+    }
+}

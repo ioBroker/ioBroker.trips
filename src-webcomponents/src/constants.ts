@@ -6,9 +6,14 @@
  */
 
 /** Name of a component: the mode of its build and the base name of its files */
-export type ComponentName = 'trips-map' | 'trips-list';
+export type ComponentName = 'trips-map' | 'trips-list' | 'trips-browser' | 'trips-diagnostics';
 
-export const COMPONENT_NAMES: ComponentName[] = ['trips-map', 'trips-list'];
+export const COMPONENT_NAMES: ComponentName[] = ['trips-map', 'trips-list', 'trips-browser', 'trips-diagnostics'];
+
+/*
+ * trips-browser and trips-diagnostics are made for the tab of the adapter in admin (a jsonConfig `custom` item
+ * with `webComponent`), and are listed for vis as well.
+ */
 
 /** `<iob-trips-map>`: the running or the last trip of one object on a map */
 export const MAP_TAG = 'iob-trips-map';
@@ -22,10 +27,18 @@ export const LIST_TAG = 'iob-trips-list';
  */
 export const LIST_CLICK_EVENT = 'trips-list-click';
 
+/** `<iob-trips-browser>`: all trips of one object, page by page, and the selected one on a map */
+export const BROWSER_TAG = 'iob-trips-browser';
+
+/** `<iob-trips-diagnostics>`: what the adapter reads from where and what it made of it */
+export const DIAGNOSTICS_TAG = 'iob-trips-diagnostics';
+
 /** The tag of each component */
 export const TAGS: Record<ComponentName, string> = {
     'trips-map': MAP_TAG,
     'trips-list': LIST_TAG,
+    'trips-browser': BROWSER_TAG,
+    'trips-diagnostics': DIAGNOSTICS_TAG,
 };
 
 /** The built module, next to its manifest */
@@ -85,3 +98,25 @@ export type ListSettings = {
     tileUrl?: string;
     attribution?: string;
 };
+
+/** The values of the settings of `<iob-trips-browser>` */
+export type BrowserSettings = {
+    instance?: string;
+    /** Empty: the element offers the objects of the instance and remembers the choice */
+    object?: string;
+    tileUrl?: string;
+    attribution?: string;
+};
+
+/** The values of the settings of `<iob-trips-diagnostics>` */
+export type DiagnosticsSettings = {
+    instance?: string;
+    /** Empty: all objects */
+    object?: string;
+};
+
+/** The browser reads the trips in pages of this size */
+export const PAGE_SIZE = 50;
+
+/** The diagnostics are read again after this time, in ms */
+export const DIAGNOSTICS_INTERVAL = 3_000;

@@ -1,0 +1,95 @@
+{
+    "$schema": "https://raw.githubusercontent.com/ioBroker/web-components/main/schemas/manifest.json",
+    "manifestVersion": 1,
+    "tag": "iob-trips-diagnostics",
+    "name": {
+        "en": "Trip diagnostics",
+        "de": "Fahrten-Diagnose",
+        "ru": "Диагностика поездок",
+        "pt": "Diagnóstico de viagens",
+        "nl": "Ritdiagnose",
+        "fr": "Diagnostic des trajets",
+        "it": "Diagnostica viaggi",
+        "es": "Diagnóstico de viajes",
+        "pl": "Diagnostyka podróży",
+        "uk": "Діагностика поїздок",
+        "zh-cn": "行程诊断"
+    },
+    "description": {
+        "en": "What the Trips adapter reads from which states and what it made of it: sources, positions, trip detection, watch and consumption",
+        "de": "Was der Trips-Adapter aus welchen Datenpunkten liest und was er daraus macht: Quellen, Positionen, Fahrterkennung, Wache und Verbrauch",
+        "ru": "Что адаптер Trips читает из каких состояний и что он из этого делает: источники, позиции, распознавание поездок, контроль и расход",
+        "pt": "O que o adaptador Trips lê de que estados e o que faz com isso: fontes, posições, deteção de viagens, vigilância e consumo",
+        "nl": "Wat de Trips-adapter uit welke datapunten leest en wat hij ermee doet: bronnen, posities, ritdetectie, bewaking en verbruik",
+        "fr": "Ce que l'adaptateur Trips lit de quels états et ce qu'il en fait : sources, positions, détection des trajets, surveillance et consommation",
+        "it": "Cosa legge l'adattatore Trips da quali stati e cosa ne ricava: sorgenti, posizioni, rilevamento viaggi, sorveglianza e consumi",
+        "es": "Qué lee el adaptador Trips de qué estados y qué hace con ello: fuentes, posiciones, detección de viajes, vigilancia y consumo",
+        "pl": "Co adapter Trips odczytuje z jakich stanów i co z tego wynika: źródła, pozycje, wykrywanie podróży, nadzór i zużycie",
+        "uk": "Що адаптер Trips читає з яких станів і що він з цього робить: джерела, позиції, розпізнавання поїздок, контроль і витрата",
+        "zh-cn": "Trips 适配器从哪些状态读取什么数据以及处理结果：数据源、位置、行程检测、监控和能耗"
+    },
+    "icon": "trips-diagnostics.svg",
+    "module": "trips-diagnostics.js",
+    "size": {
+        "width": 760,
+        "height": 600
+    },
+    "settings": {
+        "type": "panel",
+        "items": {
+            "instance": {
+                "type": "instance",
+                "adapter": "trips",
+                "default": "trips.0",
+                "label": {
+                    "en": "Trips adapter instance",
+                    "de": "Instanz des Trips-Adapters",
+                    "ru": "Экземпляр адаптера Trips",
+                    "pt": "Instância do adaptador Trips",
+                    "nl": "Instantie van de Trips-adapter",
+                    "fr": "Instance de l'adaptateur Trips",
+                    "it": "Istanza dell'adattatore Trips",
+                    "es": "Instancia del adaptador Trips",
+                    "pl": "Instancja adaptera Trips",
+                    "uk": "Екземпляр адаптера Trips",
+                    "zh-cn": "Trips 适配器实例"
+                }
+            },
+            "object": {
+                "type": "selectSendTo",
+                "command": "getObjectNames",
+                "instance": "${data.instance}",
+                "data": {
+                    "enabled": true,
+                    "empty": true
+                },
+                "label": {
+                    "en": "Object",
+                    "de": "Objekt",
+                    "ru": "Объект",
+                    "pt": "Objeto",
+                    "nl": "Object",
+                    "fr": "Objet",
+                    "it": "Oggetto",
+                    "es": "Objeto",
+                    "pl": "Obiekt",
+                    "uk": "Об'єкт",
+                    "zh-cn": "对象"
+                },
+                "help": {
+                    "en": "Empty: all objects",
+                    "de": "Leer: alle Objekte",
+                    "ru": "Пусто: все объекты",
+                    "pt": "Vazio: todos os objetos",
+                    "nl": "Leeg: alle objecten",
+                    "fr": "Vide : tous les objets",
+                    "it": "Vuoto: tutti gli oggetti",
+                    "es": "Vacío: todos los objetos",
+                    "pl": "Puste: wszystkie obiekty",
+                    "uk": "Порожньо: усі об’єкти",
+                    "zh-cn": "留空：所有对象"
+                }
+            }
+        }
+    }
+}

@@ -1,5 +1,5 @@
 /**
- * The manifests of the two components. Read by the build only (`vite.config.ts`), which writes each one as
+ * The manifests of the components. Read by the build only (`vite.config.ts`), which writes each one as
  * `<name>.json` next to its module - a host reads that file for its palette and its settings without loading the
  * module. The texts come from `dictionary.ts`, in every language.
  */
@@ -21,7 +21,6 @@ import type { WordKey } from './dictionary.ts';
 export type ManifestWord = (key: WordKey) => WebComponentText;
 
 /** The instance whose objects the setting `object` offers: the one of the setting `instance` */
-
 const INSTANCE_PATTERN = '${data.instance}';
 
 function settings(name: ComponentName, word: ManifestWord): WebComponentManifest['settings'] {
@@ -37,8 +36,8 @@ function settings(name: ComponentName, word: ManifestWord): WebComponentManifest
         type: 'selectSendTo',
         command: 'getObjectNames',
         instance: INSTANCE_PATTERN,
-        // only the running objects
-        data: { enabled: true },
+        // only the running objects, and "---" for none
+        data: { enabled: true, empty: true },
         label: word('object'),
         help: word('object_help'),
     } as const;
@@ -86,19 +85,46 @@ function settings(name: ComponentName, word: ManifestWord): WebComponentManifest
                     ...map,
                 },
             };
+
+        case 'trips-browser':
+            return {
+                type: 'panel',
+                items: {
+                    instance,
+                    // empty: the element offers the objects itself
+                    object: { ...object, help: word('object_help_browser') },
+                    ...map,
+                },
+            };
+
+        case 'trips-diagnostics':
+            return {
+                type: 'panel',
+                items: {
+                    instance,
+                    object: { ...object, help: word('object_help_all') },
+                },
+            };
     }
 }
 
-/** The size each one looks good in as a tile of a dashboard */
+/**
+ * The size each one looks good in as a tile of a dashboard. The browser and the diagnostics are made for the tab
+ * of the adapter in admin, where they fill the box of the item and scroll inside
+ */
 const SIZES: Record<ComponentName, { width: number; height: number }> = {
     'trips-map': { width: 400, height: 300 },
     'trips-list': { width: 360, height: 320 },
+    'trips-browser': { width: 900, height: 600 },
+    'trips-diagnostics': { width: 760, height: 600 },
 };
 
 /** Name and description of each one in the dictionary */
 const TEXTS: Record<ComponentName, { name: WordKey; description: WordKey }> = {
     'trips-map': { name: 'map_name', description: 'map_description' },
     'trips-list': { name: 'list_name', description: 'list_description' },
+    'trips-browser': { name: 'browser_name', description: 'browser_description' },
+    'trips-diagnostics': { name: 'diagnostics_name', description: 'diagnostics_description' },
 };
 
 /**

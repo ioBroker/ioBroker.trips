@@ -1,5 +1,5 @@
 /**
- * What both elements share: the shadow root with React, the instance and the object of the settings, and the
+ * What the elements share: the shadow root with React, the instance and the object of the settings, and the
  * objects of the instance (`getObjects`), read once per instance and socket.
  */
 import type { JSX } from 'react';
@@ -8,8 +8,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import type { WebComponentSocket } from '@iobroker/web-components';
 import { IobWebComponent } from '@iobroker/web-components/element';
 
-import { Hint } from './Hint';
+import { Hint, type HintIcon } from './Hint';
 import { toTarget } from './instance';
+import type { LiveValue } from './live';
 import { findObject, loadObjects, NoAnswerError, type TripObject } from './trips';
 import { getWord, type Word } from './words';
 
@@ -22,6 +23,18 @@ export type TargetSettings = { instance?: string; object?: string };
 /** The instance and the object the settings name - or what to say instead */
 export type Target =
     | { status: 'ok'; instance: string; object: TripObject }
+    | { status: 'loading'; instance: string }
+    | { status: 'hint'; text: string };
+
+/** The instance the settings name and its objects - or what to say instead */
+export type ObjectsTarget =
+    | {
+          status: 'ok';
+          instance: string;
+          objects: TripObject[];
+          /** The object of the settings: name, ID or empty */
+          object: string;
+      }
     | { status: 'loading'; instance: string }
     | { status: 'hint'; text: string };
 
@@ -92,11 +105,11 @@ export abstract class TripsElement<S extends TargetSettings> extends IobWebCompo
     }
 
     /**
-     * The instance and the object of the settings
+     * The instance of the settings and its objects
      *
      * @param settings the settings of the element
      */
-    protected getTarget(settings: S): Target {
+    protected getObjectsTarget(settings: S): ObjectsTarget {
         const word = this.word;
         const { instance, object } = toTarget(settings);
         if (!instance) {
@@ -115,10 +128,32 @@ export abstract class TripsElement<S extends TargetSettings> extends IobWebCompo
         if (!load.objects.length) {
             return { status: 'hint', text: word('no_objects', instance) };
         }
-        const found = findObject(load.objects, object);
+        return { status: 'ok', instance, objects: load.objects, object };
+    }
+
+    /**
+     * The instance and the object of the settings; the first object if the settings name none
+     *
+     * @param settings the settings of the element
+     */
+    protected getTarget(settings: S): Target {
+        const target = this.getObjectsTarget(settings);
+        if (target.status !== 'ok') {
+            return target;
+        }
+        const found = findObject(target.objects, target.object);
         return found
-            ? { status: 'ok', instance, object: found }
-            : { status: 'hint', text: word('object_not_found', instance, object) };
+            ? { status: 'ok', instance: target.instance, object: found }
+            : { status: 'hint', text: this.word('object_not_found', target.instance, target.object) };
+    }
+
+    /**
+     * The live states of an object, as read for `getStateIds`
+     *
+     * @param base `<instance>.<object>`
+     */
+    protected liveValue(base: string): LiveValue {
+        return state => this.states[`${base}.live.${state}`]?.val;
     }
 
     /** Read the objects of the instance once - again only for another instance or socket, or a while after an error */
@@ -162,7 +197,7 @@ export abstract class TripsElement<S extends TargetSettings> extends IobWebCompo
      * @param text what to say
      * @param icon the picture above it
      */
-    protected renderHint(text: string, icon: 'map' | 'route'): JSX.Element {
+    protected renderHint(text: string, icon: HintIcon): JSX.Element {
         return (
             <Hint
                 text={text}

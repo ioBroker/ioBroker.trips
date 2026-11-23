@@ -27,16 +27,20 @@ import {
     type TileLayer,
 } from 'leaflet';
 
+import type { LiveValue } from './live';
 import {
     formatDay,
     formatDistance,
     formatDuration,
     formatMoment,
+    formatMoney,
+    formatNumber,
     formatRoute,
     formatSpeed,
     formatTime,
     formatTimeRange,
     toDistance,
+    toNumber,
     toSpeed,
     type LatLon,
     type TripObject,
@@ -360,8 +364,8 @@ class TripMap {
         this.#programmatic = true;
         try {
             const bounds = latLngBounds(points);
-            // the box above the map takes room only if the map is big enough for both
-            const top = size.y > content.padTop * 3 ? content.padTop : 0;
+            // the box above the map takes its room as far as the map is big enough for both
+            const top = Math.min(content.padTop, Math.max(0, Math.round((size.y - 120) / 2)));
             this.#map.fitBounds(bounds, {
                 paddingTopLeft: [20, 20 + top],
                 paddingBottomRight: [20, 20],
@@ -426,6 +430,8 @@ export interface InfoContent {
     values: InfoValue[];
     /** e.g. that the track was not stored */
     note?: string;
+    /** Many values: in a grid */
+    detailed?: boolean;
 }
 
 /**
@@ -436,7 +442,7 @@ export interface InfoContent {
  */
 export function TripInfo({ info }: { info: InfoContent }): JSX.Element {
     return (
-        <div className={`info${info.running ? ' running' : ''}`}>
+        <div className={`info${info.running ? ' running' : ''}${info.detailed ? ' detailed' : ''}`}>
             <div
                 className="info-status"
                 title={info.status}
@@ -558,6 +564,127 @@ export function summaryInfo(summary: TripSummary, object: TripObject, word: Word
             toSpeed(summary.avgSpeed, object.speedUnit),
         ),
         note: summary.track ? undefined : word('no_track'),
+    };
+}
+
+/**
+ * The box of the running trip: since when, how fast now, and its numbers from the live states
+ *
+ * @param object the object, for its units
+ * @param live the live states of the object - in its units already
+ * @param word the words of the element
+ * @param lang the language of the system
+ * @param summary the summary of the running track: with it, the start place, the maximum speed and the stops too
+ */
+export function runningInfo(
+    object: TripObject,
+    live: LiveValue,
+    word: Word,
+    lang: string,
+    summary?: TripSummary | null,
+): InfoContent {
+    const start = toNumber(live('start'));
+    const speed = toNumber(live('speed'));
+    const values = infoValues(
+        word,
+        lang,
+        object,
+        toNumber(live('distance')),
+        toNumber(live('duration')),
+        toNumber(live('avgSpeed')),
+    );
+    if (summary) {
+        values.push(
+            {
+                key: 'maxSpeed',
+                label: word('max_speed'),
+                value: formatSpeed(toSpeed(summary.maxSpeed, object.speedUnit), object.speedUnit, lang),
+            },
+            { key: 'stops', label: word('stops'), value: String(summary.stops?.length ?? 0) },
+        );
+    }
+    return {
+        status: [
+            word('running'),
+            start ? word('since', formatMoment(start, lang)) : '',
+            speed !== undefined ? formatSpeed(speed, object.speedUnit, lang) : '',
+        ]
+            .filter(Boolean)
+            .join(' · '),
+        running: true,
+        route: summary?.from ? formatRoute(summary.from, undefined) : '',
+        values,
+        detailed: !!summary,
+    };
+}
+
+/**
+ * Everything the adapter knows of a finished trip: when, from where to where, distance, times, speeds, stops,
+ * consumption and cost; for a boat the share under sail and the engine hours
+ *
+ * @param summary the trip as the adapter keeps it
+ * @param object the object, for its units
+ * @param word the words of the element
+ * @param lang the language of the system
+ */
+export function tripDetails(summary: TripSummary, object: TripObject, word: Word, lang: string): InfoContent {
+    const info = summaryInfo(summary, object, word, lang);
+    const values = info.values;
+    values.splice(2, 0, {
+        key: 'movingTime',
+        label: word('moving_time'),
+        value: formatDuration(summary.movingTime, lang),
+    });
+    values.push(
+        {
+            key: 'maxSpeed',
+            label: word('max_speed'),
+            value: formatSpeed(toSpeed(summary.maxSpeed, object.speedUnit), object.speedUnit, lang),
+        },
+        { key: 'stops', label: word('stops'), value: String(summary.stops?.length ?? 0) },
+    );
+    if (typeof summary.consumption === 'number') {
+        values.push({
+            key: 'consumption',
+            label: word('consumption'),
+            value: `${formatNumber(summary.consumption, 1, lang)} ${summary.consumptionUnit || ''}`.trim(),
+        });
+    }
+    if (typeof summary.cost === 'number') {
+        values.push({ key: 'cost', label: word('cost'), value: formatMoney(summary.cost, summary.currency, lang) });
+    }
+    if (object.type === 'boat') {
+        if (typeof summary.sailDistance === 'number' && summary.distance > 0) {
+            const share = Math.round((summary.sailDistance / summary.distance) * 100);
+            values.push({ key: 'sail', label: word('under_sail'), value: `${formatNumber(share, 0, lang)} %` });
+        }
+        if (typeof summary.engineTime === 'number') {
+            values.push({
+                key: 'engine',
+                label: word('engine_hours'),
+                value: formatDuration(summary.engineTime, lang),
+            });
+        }
+    }
+    info.detailed = true;
+    return info;
+}
+
+/**
+ * Start, destination and stops of a trip whose track is not stored (any more): the map shows at least these
+ *
+ * @param summary the trip
+ */
+export function summaryTrack(summary: TripSummary): TripTrack | null {
+    const { startLat, startLon, endLat, endLon } = summary;
+    if (startLat === null || startLon === null || endLat === null || endLon === null) {
+        return null;
+    }
+    return {
+        // one point each: no line, only the markers of start and destination
+        segments: [[[startLat, startLon]], [[endLat, endLon]]],
+        stops: (summary.stops || []).filter(stop => stop.lat !== null && stop.lon !== null),
+        summary,
     };
 }
 

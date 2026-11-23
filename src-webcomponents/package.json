@@ -4,7 +4,7 @@
     "version": "0.0.1",
     "type": "module",
     "scripts": {
-        "build": "vite build --mode trips-map && vite build --mode trips-list",
+        "build": "vite build --mode trips-map && vite build --mode trips-list && vite build --mode trips-browser && vite build --mode trips-diagnostics",
         "check-ts": "tsc --noEmit",
         "lint": "eslint -c eslint.config.mjs src"
     },

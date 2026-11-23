@@ -82,7 +82,7 @@
     ],
     "globalDependencies": [
       {
-        "admin": ">=7.6.17"
+        "admin": ">=8.3.11"
       }
     ],
     "webComponents": [
@@ -129,8 +129,69 @@
           "width": 360,
           "height": 320
         }
+      },
+      {
+        "manifest": "webcomponents/trips-browser.json",
+        "tag": "iob-trips-browser",
+        "name": {
+          "en": "Trip browser",
+          "de": "Fahrtenbrowser",
+          "ru": "Обзор поездок",
+          "pt": "Navegador de viagens",
+          "nl": "Rittenoverzicht",
+          "fr": "Explorateur de trajets",
+          "it": "Esplora viaggi",
+          "es": "Explorador de viajes",
+          "pl": "Przeglądarka podróży",
+          "uk": "Огляд поїздок",
+          "zh-cn": "行程浏览"
+        },
+        "icon": "trips-browser.svg",
+        "size": {
+          "width": 900,
+          "height": 600
+        }
+      },
+      {
+        "manifest": "webcomponents/trips-diagnostics.json",
+        "tag": "iob-trips-diagnostics",
+        "name": {
+          "en": "Trip diagnostics",
+          "de": "Fahrten-Diagnose",
+          "ru": "Диагностика поездок",
+          "pt": "Diagnóstico de viagens",
+          "nl": "Ritdiagnose",
+          "fr": "Diagnostic des trajets",
+          "it": "Diagnostica viaggi",
+          "es": "Diagnóstico de viajes",
+          "pl": "Diagnostyka podróży",
+          "uk": "Діагностика поїздок",
+          "zh-cn": "行程诊断"
+        },
+        "icon": "trips-diagnostics.svg",
+        "size": {
+          "width": 760,
+          "height": 600
+        }
       }
-    ]
+    ],
+    "adminTab": {
+      "link": "jsonTab.json",
+      "singleton": false,
+      "name": {
+        "en": "Trips",
+        "de": "Fahrten",
+        "ru": "Поездки",
+        "pt": "Viagens",
+        "nl": "Ritten",
+        "fr": "Trajets",
+        "it": "Viaggi",
+        "es": "Viajes",
+        "pl": "Podróże",
+        "uk": "Поїздки",
+        "zh-cn": "行程"
+      }
+    }
   },
   "native": {
     "objects": [],

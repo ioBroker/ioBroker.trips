@@ -185,6 +185,8 @@ sendTo('trips.0', 'getTrack', { object: 'Car', id: 'current', format: 'geojson' 
 sendTo('trips.0', 'endTrip', { object: 'Car' });
 // the objects with their state prefix and units (for widgets)
 sendTo('trips.0', 'getObjects', {}, list => console.log(list));
+// what is read from where and what the adapter made of it (all objects or one)
+sendTo('trips.0', 'getDiagnostics', { object: 'Car' }, diag => console.log(diag));
 
 // logbook: change a trip (recorded in the change log)
 sendTo('trips.0', 'updateTrip', { object: 'Car', id: '20261123-081500', category: 'business', purpose: 'Customer visit', partner: 'ACME' }, res => console.log(res));
@@ -197,6 +199,16 @@ sendTo('trips.0', 'getChanges', { object: 'Car', year: 2026 }, changes => consol
 
 The summaries (`getTrips`, `lastTrip.json`, the files) are always in meters, seconds and m/s, the states (`live.*`,
 `lastTrip.*`, `stats.*`) in the units of the object (km, nm or mi; km/h, kn or mph).
+
+## Admin tab
+
+The adapter adds the tab **Trips** to admin (from admin 8.3.11):
+
+- **Trips**: the list of the trips with a map of the selected one, the running trip on top, live.
+- **Diagnostics**: per object which states each source reads, their values and ages, which source is used now and
+  what happened to the positions (used, from a source with a worse priority, too inaccurate, outliers, ...), where
+  the ignition/engine comes from, the state of the detection and of the running trip, the watch, the consumption and
+  the settings in use. The first place to look when a trip is not detected.
 
 ## Widgets
 
@@ -236,7 +248,7 @@ watch go to the same messenger.
 - Widgets: calendar heatmap, statistics tiles; editing the logbook in the trip list
 - Boats: automatic hourly logbook (position, SOG, COG, wind, pressure), polar diagram
 - Fuel log: refuellings from the level jumps, real consumption between two refuellings
-- Admin tab with the trips (merge, split, rename)
+- Admin tab: merge, split and rename trips
 
 <!--
 	Placeholder for the next version (at the beginning of the line):
@@ -247,6 +259,7 @@ watch go to the same messenger.
 * (@GermanBluefox) initial release
 * (@GermanBluefox) measured consumption (counter, level/SoC, flow), share under sail for boats, anchor/position watch, logbook with change log and CSV export
 * (@GermanBluefox) widgets: trip map and trip list
+* (@GermanBluefox) admin tab with the trips on a map and a diagnosis of the sources; serial-gps: the fix quality confirms the position of a standing receiver
 
 ## License
 

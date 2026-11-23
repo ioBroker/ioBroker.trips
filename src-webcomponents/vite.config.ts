@@ -18,14 +18,14 @@ import { buildManifest } from './src/manifest.ts';
 import { COMPONENT_WORDS } from './src/wordKeys.ts';
 
 /**
- * The web components `<iob-trips-map>` and `<iob-trips-list>`: one ES module each, `admin/webcomponents/<name>.js`,
- * its manifest `<name>.json` and its icon `<name>.svg` next to it (`common.webComponents`). Every host - vis-2,
- * devices, Aura, admin - reads them from `/adapter/trips/webcomponents/`. No module federation: the host shares
- * nothing but the socket.
+ * The web components `<iob-trips-map>`, `<iob-trips-list>`, `<iob-trips-browser>` and `<iob-trips-diagnostics>`:
+ * one ES module each, `admin/webcomponents/<name>.js`, its manifest `<name>.json` and its icon `<name>.svg` next to
+ * it (`common.webComponents`). Every host - vis-2, devices, Aura, admin - reads them from
+ * `/adapter/trips/webcomponents/`. No module federation: the host shares nothing but the socket.
  *
- * One build per component - `vite build --mode <name>` (`npm run build` runs both): a host imports exactly one URL
+ * One build per component - `vite build --mode <name>` (`npm run build` runs all): a host imports exactly one URL
  * per component, so each module is one file, with the shared code (and Leaflet) compiled into each. One build with
- * two entries would move the shared code into chunks of their own.
+ * several entries would move the shared code into chunks of their own.
  *
  * React is not bundled: the four React imports point at `lib/esm/react-19.js`, which web and admin serve beside
  * `adapter/`. The path is relative to the module, so a path prefix of a reverse proxy stays.
@@ -37,6 +37,8 @@ const LANGUAGES: ioBroker.Languages[] = ['en', 'de', 'ru', 'pt', 'nl', 'fr', 'it
 const ENTRIES: Record<ComponentName, string> = {
     'trips-map': './src/TripsMap.tsx',
     'trips-list': './src/TripsList.tsx',
+    'trips-browser': './src/TripsBrowser.tsx',
+    'trips-diagnostics': './src/TripsDiagnostics.tsx',
 };
 
 type Dictionary = Record<string, string>;

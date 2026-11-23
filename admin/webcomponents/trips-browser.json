@@ -1,0 +1,170 @@
+{
+    "$schema": "https://raw.githubusercontent.com/ioBroker/web-components/main/schemas/manifest.json",
+    "manifestVersion": 1,
+    "tag": "iob-trips-browser",
+    "name": {
+        "en": "Trip browser",
+        "de": "Fahrtenbrowser",
+        "ru": "Обзор поездок",
+        "pt": "Navegador de viagens",
+        "nl": "Rittenoverzicht",
+        "fr": "Explorateur de trajets",
+        "it": "Esplora viaggi",
+        "es": "Explorador de viajes",
+        "pl": "Przeglądarka podróży",
+        "uk": "Огляд поїздок",
+        "zh-cn": "行程浏览"
+    },
+    "description": {
+        "en": "All trips of a car, boat or person, page by page, and the selected one on a map with all its numbers - the running trip live",
+        "de": "Alle Fahrten eines Autos, Boots oder einer Person, Seite für Seite, und die gewählte auf einer Karte mit allen Werten - die laufende Fahrt live",
+        "ru": "Все поездки автомобиля, лодки или человека, страница за страницей, и выбранная поездка на карте со всеми показателями - текущая поездка в реальном времени",
+        "pt": "Todas as viagens de um carro, barco ou pessoa, página a página, e a selecionada num mapa com todos os valores - a viagem em curso ao vivo",
+        "nl": "Alle ritten van een auto, boot of persoon, pagina voor pagina, en de gekozen rit op een kaart met alle waarden - de lopende rit live",
+        "fr": "Tous les trajets d'une voiture, d'un bateau ou d'une personne, page par page, et le trajet choisi sur une carte avec toutes ses valeurs - le trajet en cours en direct",
+        "it": "Tutti i viaggi di un'auto, una barca o una persona, pagina per pagina, e quello selezionato su una mappa con tutti i valori - il viaggio in corso dal vivo",
+        "es": "Todos los viajes de un coche, barco o persona, página a página, y el seleccionado en un mapa con todos sus valores - el viaje en curso en directo",
+        "pl": "Wszystkie podróże samochodu, łodzi lub osoby, strona po stronie, i wybrana na mapie ze wszystkimi wartościami - bieżąca podróż na żywo",
+        "uk": "Усі поїздки автомобіля, човна чи людини, сторінка за сторінкою, і вибрана поїздка на карті з усіма показниками - поточна поїздка наживо",
+        "zh-cn": "分页显示汽车、船只或人员的所有行程，并在地图上显示所选行程及其全部数据——进行中的行程实时显示"
+    },
+    "icon": "trips-browser.svg",
+    "module": "trips-browser.js",
+    "size": {
+        "width": 900,
+        "height": 600
+    },
+    "settings": {
+        "type": "panel",
+        "items": {
+            "instance": {
+                "type": "instance",
+                "adapter": "trips",
+                "default": "trips.0",
+                "label": {
+                    "en": "Trips adapter instance",
+                    "de": "Instanz des Trips-Adapters",
+                    "ru": "Экземпляр адаптера Trips",
+                    "pt": "Instância do adaptador Trips",
+                    "nl": "Instantie van de Trips-adapter",
+                    "fr": "Instance de l'adaptateur Trips",
+                    "it": "Istanza dell'adattatore Trips",
+                    "es": "Instancia del adaptador Trips",
+                    "pl": "Instancja adaptera Trips",
+                    "uk": "Екземпляр адаптера Trips",
+                    "zh-cn": "Trips 适配器实例"
+                }
+            },
+            "object": {
+                "type": "selectSendTo",
+                "command": "getObjectNames",
+                "instance": "${data.instance}",
+                "data": {
+                    "enabled": true,
+                    "empty": true
+                },
+                "label": {
+                    "en": "Object",
+                    "de": "Objekt",
+                    "ru": "Объект",
+                    "pt": "Objeto",
+                    "nl": "Object",
+                    "fr": "Objet",
+                    "it": "Oggetto",
+                    "es": "Objeto",
+                    "pl": "Obiekt",
+                    "uk": "Об'єкт",
+                    "zh-cn": "对象"
+                },
+                "help": {
+                    "en": "Empty: the element offers the objects of the instance and remembers the choice",
+                    "de": "Leer: Das Element bietet die Objekte der Instanz an und merkt sich die Wahl",
+                    "ru": "Пусто: элемент предлагает объекты экземпляра и запоминает выбор",
+                    "pt": "Vazio: o elemento oferece os objetos da instância e memoriza a escolha",
+                    "nl": "Leeg: het element biedt de objecten van de instantie aan en onthoudt de keuze",
+                    "fr": "Vide : l'élément propose les objets de l'instance et mémorise le choix",
+                    "it": "Vuoto: l'elemento offre gli oggetti dell'istanza e ricorda la scelta",
+                    "es": "Vacío: el elemento ofrece los objetos de la instancia y recuerda la elección",
+                    "pl": "Puste: element oferuje obiekty instancji i zapamiętuje wybór",
+                    "uk": "Порожньо: елемент пропонує об’єкти екземпляра і запам’ятовує вибір",
+                    "zh-cn": "留空：元素列出实例的对象并记住所选项"
+                }
+            },
+            "_map": {
+                "type": "header",
+                "text": {
+                    "en": "Map",
+                    "de": "Karte",
+                    "ru": "Карта",
+                    "pt": "Mapa",
+                    "nl": "Kaart",
+                    "fr": "Carte",
+                    "it": "Mappa",
+                    "es": "Mapa",
+                    "pl": "Mapa",
+                    "uk": "Карта",
+                    "zh-cn": "地图"
+                }
+            },
+            "tileUrl": {
+                "type": "text",
+                "default": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "label": {
+                    "en": "Map tiles (URL)",
+                    "de": "Kartenkacheln (URL)",
+                    "ru": "Тайлы карты (URL)",
+                    "pt": "Mosaicos do mapa (URL)",
+                    "nl": "Kaarttegels (URL)",
+                    "fr": "Tuiles de la carte (URL)",
+                    "it": "Tasselli della mappa (URL)",
+                    "es": "Teselas del mapa (URL)",
+                    "pl": "Kafelki mapy (URL)",
+                    "uk": "Тайли карти (URL)",
+                    "zh-cn": "地图瓦片（URL）"
+                },
+                "help": {
+                    "en": "{z}, {x} and {y} are replaced, {s} by a subdomain a, b or c. Empty: OpenStreetMap",
+                    "de": "{z}, {x} und {y} werden ersetzt, {s} durch eine Subdomain a, b oder c. Leer: OpenStreetMap",
+                    "ru": "{z}, {x} и {y} заменяются, {s} — поддоменом a, b или c. Пусто: OpenStreetMap",
+                    "pt": "{z}, {x} e {y} são substituídos, {s} por um subdomínio a, b ou c. Vazio: OpenStreetMap",
+                    "nl": "{z}, {x} en {y} worden vervangen, {s} door een subdomein a, b of c. Leeg: OpenStreetMap",
+                    "fr": "{z}, {x} et {y} sont remplacés, {s} par un sous-domaine a, b ou c. Vide : OpenStreetMap",
+                    "it": "{z}, {x} e {y} vengono sostituiti, {s} con un sottodominio a, b o c. Vuoto: OpenStreetMap",
+                    "es": "{z}, {x} e {y} se sustituyen, {s} por un subdominio a, b o c. Vacío: OpenStreetMap",
+                    "pl": "{z}, {x} i {y} są zastępowane, {s} subdomeną a, b lub c. Puste: OpenStreetMap",
+                    "uk": "{z}, {x} і {y} замінюються, {s} — піддоменом a, b або c. Порожньо: OpenStreetMap",
+                    "zh-cn": "{z}、{x} 和 {y} 会被替换，{s} 替换为子域名 a、b 或 c。为空时使用 OpenStreetMap"
+                }
+            },
+            "attribution": {
+                "type": "text",
+                "label": {
+                    "en": "Source of the map",
+                    "de": "Quellenangabe der Karte",
+                    "ru": "Источник карты",
+                    "pt": "Fonte do mapa",
+                    "nl": "Bronvermelding van de kaart",
+                    "fr": "Source de la carte",
+                    "it": "Fonte della mappa",
+                    "es": "Fuente del mapa",
+                    "pl": "Źródło mapy",
+                    "uk": "Джерело карти",
+                    "zh-cn": "地图来源"
+                },
+                "help": {
+                    "en": "Shown at the bottom of the map, as the tile server asks for. Empty: © OpenStreetMap contributors",
+                    "de": "Wird unten auf der Karte angezeigt, wie es der Kachelserver verlangt. Leer: © OpenStreetMap-Mitwirkende",
+                    "ru": "Показывается внизу карты, как требует сервер тайлов. Пусто: © участники OpenStreetMap",
+                    "pt": "Mostrado na parte inferior do mapa, como o servidor de mosaicos exige. Vazio: © contribuidores do OpenStreetMap",
+                    "nl": "Wordt onderaan de kaart getoond, zoals de tegelserver vraagt. Leeg: © OpenStreetMap-bijdragers",
+                    "fr": "Affichée en bas de la carte, comme l'exige le serveur de tuiles. Vide : © contributeurs d'OpenStreetMap",
+                    "it": "Mostrata in fondo alla mappa, come richiesto dal server dei tasselli. Vuoto: © contributori di OpenStreetMap",
+                    "es": "Se muestra en la parte inferior del mapa, como exige el servidor de teselas. Vacío: © colaboradores de OpenStreetMap",
+                    "pl": "Wyświetlane na dole mapy, zgodnie z wymaganiami serwera kafelków. Puste: © współtwórcy OpenStreetMap",
+                    "uk": "Показується внизу карти, як вимагає сервер тайлів. Порожньо: © учасники OpenStreetMap",
+                    "zh-cn": "按瓦片服务器的要求显示在地图底部。为空时显示 © OpenStreetMap 贡献者"
+                }
+            }
+        }
+    }
+}
