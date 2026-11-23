@@ -20,6 +20,14 @@ export default [
         },
     },
     {
-        ignores: ['build/**/*', 'admin/**/*', 'test/**/*', 'tmp/**/*', '**/*.mjs'],
+        ignores: [
+            'build/**/*',
+            'admin/**/*',
+            'test/**/*',
+            'tmp/**/*',
+            '**/*.mjs',
+            // the web components are a Vite project of their own, linted with `npm run lint:wc`
+            'src-webcomponents/**/*',
+        ],
     },
 ];

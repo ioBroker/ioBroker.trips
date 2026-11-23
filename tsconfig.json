@@ -26,5 +26,6 @@
         "types": ["node", "@iobroker/types"]
     },
     "include": ["src/**/*.*", "src/**/*.d.*"],
-    "exclude": ["build/**", "node_modules/**"]
+    // the web components have a tsconfig of their own: `npm run check:wc`
+    "exclude": ["build/**", "node_modules/**", "src-webcomponents/**"]
 }

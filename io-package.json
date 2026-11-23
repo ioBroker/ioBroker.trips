@@ -84,6 +84,52 @@
       {
         "admin": ">=7.6.17"
       }
+    ],
+    "webComponents": [
+      {
+        "manifest": "webcomponents/trips-map.json",
+        "tag": "iob-trips-map",
+        "name": {
+          "en": "Trip map",
+          "de": "Fahrtenkarte",
+          "ru": "Карта поездок",
+          "pt": "Mapa de viagens",
+          "nl": "Rittenkaart",
+          "fr": "Carte des trajets",
+          "it": "Mappa dei viaggi",
+          "es": "Mapa de viajes",
+          "pl": "Mapa podróży",
+          "uk": "Карта поїздок",
+          "zh-cn": "行程地图"
+        },
+        "icon": "trips-map.svg",
+        "size": {
+          "width": 400,
+          "height": 300
+        }
+      },
+      {
+        "manifest": "webcomponents/trips-list.json",
+        "tag": "iob-trips-list",
+        "name": {
+          "en": "Trip list",
+          "de": "Fahrtenliste",
+          "ru": "Список поездок",
+          "pt": "Lista de viagens",
+          "nl": "Rittenlijst",
+          "fr": "Liste des trajets",
+          "it": "Elenco dei viaggi",
+          "es": "Lista de viajes",
+          "pl": "Lista podróży",
+          "uk": "Список поїздок",
+          "zh-cn": "行程列表"
+        },
+        "icon": "trips-list.svg",
+        "size": {
+          "width": 360,
+          "height": 320
+        }
+      }
     ]
   },
   "native": {

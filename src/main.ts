@@ -1517,7 +1517,10 @@ export class TripsAdapter extends Adapter {
     private async handleMessage(command: string, msg: Record<string, any>, from: string): Promise<unknown> {
         switch (command) {
             case 'getObjectNames':
-                return (this.config.objects || []).filter(o => o?.name).map(o => ({ label: o.name, value: o.name }));
+                // the settings list all objects, the widgets (`enabled: true`) only the running ones
+                return (this.config.objects || [])
+                    .filter(o => o?.name?.trim() && (!msg.enabled || o.enabled))
+                    .map(o => ({ label: o.name, value: o.name }));
 
             case 'getPlaceNames':
                 return [

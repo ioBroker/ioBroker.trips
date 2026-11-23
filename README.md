@@ -193,11 +193,29 @@ sendTo('trips.0', 'exportLogbook', { object: 'Car', year: 2026, changes: true },
 sendTo('trips.0', 'getChanges', { object: 'Car', year: 2026 }, changes => console.log(changes));
 ```
 
+The summaries (`getTrips`, `lastTrip.json`, the files) are always in meters, seconds and m/s, the states (`live.*`,
+`lastTrip.*`, `stats.*`) in the units of the object (km, nm or mi; km/h, kn or mph).
+
+## Widgets
+
+The adapter brings two web components for hosts that load the widgets of adapters (`common.webComponents`). React
+comes from the host, Leaflet is included.
+
+- **Trip map** (`<iob-trips-map>`): the running trip with the current position, live, or the last trip. With
+  distance, duration and average speed, the stops and a dark theme.
+- **Trip list** (`<iob-trips-list>`): the last trips with distance, duration, consumption and cost. A click opens the
+  trip on a map; the host can take over the click with the event `trips-list-click`.
+
+Both have the settings instance, object and the tile server (default: OpenStreetMap). The sources are in
+`src-webcomponents`, built with `npm run build:wc` into `admin/webcomponents`.
+
 ## Places and privacy
 
 Places have a name, a position and a radius. A trip that starts or ends in a place gets its name
 (`Home → Office`). Positions inside a place marked as **privacy zone** are never stored in a track, their
-coordinates are not stored in the summary, and they are never sent to the geocoder.
+coordinates are not stored in the summary, and they are never sent to the geocoder. The live states
+(`live.position`, `live.latitude`, `live.longitude`) always show the current position, also inside a privacy zone:
+do not log them with a history adapter if that matters.
 
 **Reverse geocoding** (off by default) asks OpenStreetMap Nominatim for the address of the start and the destination
 outside the places. This sends these positions to openstreetmap.org. The answers are cached.
@@ -226,6 +244,7 @@ watch go to the same messenger.
 ### **WORK IN PROGRESS**
 * (@GermanBluefox) initial release
 * (@GermanBluefox) measured consumption (counter, level/SoC, flow), share under sail for boats, anchor/position watch, logbook with change log and CSV export
+* (@GermanBluefox) widgets: trip map and trip list
 
 ## License
 

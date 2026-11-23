@@ -10,6 +10,10 @@ admin/i18n/*/flat.txt
 .dev-server
 .vscode
 
+# Web components are built into admin/webcomponents (committed)
+src-webcomponents/node_modules
+src-webcomponents/build
+
 #ignore .commitinfo created by ioBroker release script
 .commitinfo
 /*.tgz

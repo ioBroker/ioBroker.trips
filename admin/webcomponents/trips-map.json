@@ -1,0 +1,254 @@
+{
+    "$schema": "https://raw.githubusercontent.com/ioBroker/web-components/main/schemas/manifest.json",
+    "manifestVersion": 1,
+    "tag": "iob-trips-map",
+    "name": {
+        "en": "Trip map",
+        "de": "Fahrtenkarte",
+        "ru": "Карта поездок",
+        "pt": "Mapa de viagens",
+        "nl": "Rittenkaart",
+        "fr": "Carte des trajets",
+        "it": "Mappa dei viaggi",
+        "es": "Mapa de viajes",
+        "pl": "Mapa podróży",
+        "uk": "Карта поїздок",
+        "zh-cn": "行程地图"
+    },
+    "description": {
+        "en": "The running or the last trip of a car, boat or person on a map, with distance, duration and average speed",
+        "de": "Die laufende oder die letzte Fahrt eines Autos, Boots oder einer Person auf einer Karte, mit Strecke, Dauer und Durchschnittsgeschwindigkeit",
+        "ru": "Текущая или последняя поездка автомобиля, лодки или человека на карте, с расстоянием, продолжительностью и средней скоростью",
+        "pt": "A viagem em curso ou a última de um carro, barco ou pessoa num mapa, com distância, duração e velocidade média",
+        "nl": "De lopende of laatste rit van een auto, boot of persoon op een kaart, met afstand, duur en gemiddelde snelheid",
+        "fr": "Le trajet en cours ou le dernier trajet d'une voiture, d'un bateau ou d'une personne sur une carte, avec la distance, la durée et la vitesse moyenne",
+        "it": "Il viaggio in corso o l'ultimo di un'auto, una barca o una persona su una mappa, con distanza, durata e velocità media",
+        "es": "El viaje en curso o el último de un coche, barco o persona en un mapa, con distancia, duración y velocidad media",
+        "pl": "Bieżąca lub ostatnia podróż samochodu, łodzi lub osoby na mapie, z dystansem, czasem trwania i średnią prędkością",
+        "uk": "Поточна або остання поїздка автомобіля, човна чи людини на карті, з відстанню, тривалістю та середньою швидкістю",
+        "zh-cn": "在地图上显示汽车、船只或人员正在进行的或最近一次的行程，包括距离、时长和平均速度"
+    },
+    "icon": "trips-map.svg",
+    "module": "trips-map.js",
+    "size": {
+        "width": 400,
+        "height": 300
+    },
+    "settings": {
+        "type": "panel",
+        "items": {
+            "instance": {
+                "type": "instance",
+                "adapter": "trips",
+                "default": "trips.0",
+                "label": {
+                    "en": "Trips adapter instance",
+                    "de": "Instanz des Trips-Adapters",
+                    "ru": "Экземпляр адаптера Trips",
+                    "pt": "Instância do adaptador Trips",
+                    "nl": "Instantie van de Trips-adapter",
+                    "fr": "Instance de l'adaptateur Trips",
+                    "it": "Istanza dell'adattatore Trips",
+                    "es": "Instancia del adaptador Trips",
+                    "pl": "Instancja adaptera Trips",
+                    "uk": "Екземпляр адаптера Trips",
+                    "zh-cn": "Trips 适配器实例"
+                }
+            },
+            "object": {
+                "type": "selectSendTo",
+                "command": "getObjectNames",
+                "instance": "${data.instance}",
+                "data": {
+                    "enabled": true
+                },
+                "label": {
+                    "en": "Object",
+                    "de": "Objekt",
+                    "ru": "Объект",
+                    "pt": "Objeto",
+                    "nl": "Object",
+                    "fr": "Objet",
+                    "it": "Oggetto",
+                    "es": "Objeto",
+                    "pl": "Obiekt",
+                    "uk": "Об'єкт",
+                    "zh-cn": "对象"
+                },
+                "help": {
+                    "en": "The car, boat or person, as configured in the instance. Empty: the first one",
+                    "de": "Das Auto, Boot oder die Person, wie in der Instanz konfiguriert. Leer: das erste",
+                    "ru": "Автомобиль, лодка или человек, как настроено в экземпляре. Пусто: первый",
+                    "pt": "O carro, barco ou pessoa, como configurado na instância. Vazio: o primeiro",
+                    "nl": "De auto, boot of persoon, zoals ingesteld in de instantie. Leeg: de eerste",
+                    "fr": "La voiture, le bateau ou la personne, tels que configurés dans l'instance. Vide : le premier",
+                    "it": "L'auto, la barca o la persona, come configurati nell'istanza. Vuoto: il primo",
+                    "es": "El coche, barco o persona, tal como está configurado en la instancia. Vacío: el primero",
+                    "pl": "Samochód, łódź lub osoba, jak skonfigurowano w instancji. Puste: pierwszy",
+                    "uk": "Автомобіль, човен чи людина, як налаштовано в екземплярі. Порожньо: перший",
+                    "zh-cn": "实例中配置的汽车、船只或人员。为空时使用第一个"
+                }
+            },
+            "mode": {
+                "type": "select",
+                "default": "live",
+                "label": {
+                    "en": "Show",
+                    "de": "Anzeigen",
+                    "ru": "Показывать",
+                    "pt": "Mostrar",
+                    "nl": "Tonen",
+                    "fr": "Afficher",
+                    "it": "Mostra",
+                    "es": "Mostrar",
+                    "pl": "Pokaż",
+                    "uk": "Показувати",
+                    "zh-cn": "显示"
+                },
+                "options": [
+                    {
+                        "value": "live",
+                        "label": {
+                            "en": "The running trip, else the last one",
+                            "de": "Die laufende Fahrt, sonst die letzte",
+                            "ru": "Текущую поездку, иначе последнюю",
+                            "pt": "A viagem em curso, senão a última",
+                            "nl": "De lopende rit, anders de laatste",
+                            "fr": "Le trajet en cours, sinon le dernier",
+                            "it": "Il viaggio in corso, altrimenti l'ultimo",
+                            "es": "El viaje en curso, si no el último",
+                            "pl": "Bieżącą podróż, w przeciwnym razie ostatnią",
+                            "uk": "Поточну поїздку, інакше останню",
+                            "zh-cn": "正在进行的行程，否则显示最近一次"
+                        }
+                    },
+                    {
+                        "value": "last",
+                        "label": {
+                            "en": "Always the last finished trip",
+                            "de": "Immer die letzte beendete Fahrt",
+                            "ru": "Всегда последнюю завершённую поездку",
+                            "pt": "Sempre a última viagem terminada",
+                            "nl": "Altijd de laatste afgeronde rit",
+                            "fr": "Toujours le dernier trajet terminé",
+                            "it": "Sempre l'ultimo viaggio concluso",
+                            "es": "Siempre el último viaje terminado",
+                            "pl": "Zawsze ostatnią zakończoną podróż",
+                            "uk": "Завжди останню завершену поїздку",
+                            "zh-cn": "始终显示最近一次已结束的行程"
+                        }
+                    }
+                ]
+            },
+            "showInfo": {
+                "type": "checkbox",
+                "default": true,
+                "label": {
+                    "en": "Show distance, duration and speed",
+                    "de": "Strecke, Dauer und Geschwindigkeit anzeigen",
+                    "ru": "Показывать расстояние, продолжительность и скорость",
+                    "pt": "Mostrar distância, duração e velocidade",
+                    "nl": "Afstand, duur en snelheid tonen",
+                    "fr": "Afficher la distance, la durée et la vitesse",
+                    "it": "Mostra distanza, durata e velocità",
+                    "es": "Mostrar distancia, duración y velocidad",
+                    "pl": "Pokaż dystans, czas trwania i prędkość",
+                    "uk": "Показувати відстань, тривалість і швидкість",
+                    "zh-cn": "显示距离、时长和速度"
+                }
+            },
+            "showStops": {
+                "type": "checkbox",
+                "default": true,
+                "label": {
+                    "en": "Show the stops",
+                    "de": "Halte anzeigen",
+                    "ru": "Показывать остановки",
+                    "pt": "Mostrar as paragens",
+                    "nl": "Stops tonen",
+                    "fr": "Afficher les arrêts",
+                    "it": "Mostra le soste",
+                    "es": "Mostrar las paradas",
+                    "pl": "Pokaż postoje",
+                    "uk": "Показувати зупинки",
+                    "zh-cn": "显示停留点"
+                }
+            },
+            "_map": {
+                "type": "header",
+                "text": {
+                    "en": "Map",
+                    "de": "Karte",
+                    "ru": "Карта",
+                    "pt": "Mapa",
+                    "nl": "Kaart",
+                    "fr": "Carte",
+                    "it": "Mappa",
+                    "es": "Mapa",
+                    "pl": "Mapa",
+                    "uk": "Карта",
+                    "zh-cn": "地图"
+                }
+            },
+            "tileUrl": {
+                "type": "text",
+                "default": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "label": {
+                    "en": "Map tiles (URL)",
+                    "de": "Kartenkacheln (URL)",
+                    "ru": "Тайлы карты (URL)",
+                    "pt": "Mosaicos do mapa (URL)",
+                    "nl": "Kaarttegels (URL)",
+                    "fr": "Tuiles de la carte (URL)",
+                    "it": "Tasselli della mappa (URL)",
+                    "es": "Teselas del mapa (URL)",
+                    "pl": "Kafelki mapy (URL)",
+                    "uk": "Тайли карти (URL)",
+                    "zh-cn": "地图瓦片（URL）"
+                },
+                "help": {
+                    "en": "{z}, {x} and {y} are replaced, {s} by a subdomain a, b or c. Empty: OpenStreetMap",
+                    "de": "{z}, {x} und {y} werden ersetzt, {s} durch eine Subdomain a, b oder c. Leer: OpenStreetMap",
+                    "ru": "{z}, {x} и {y} заменяются, {s} — поддоменом a, b или c. Пусто: OpenStreetMap",
+                    "pt": "{z}, {x} e {y} são substituídos, {s} por um subdomínio a, b ou c. Vazio: OpenStreetMap",
+                    "nl": "{z}, {x} en {y} worden vervangen, {s} door een subdomein a, b of c. Leeg: OpenStreetMap",
+                    "fr": "{z}, {x} et {y} sont remplacés, {s} par un sous-domaine a, b ou c. Vide : OpenStreetMap",
+                    "it": "{z}, {x} e {y} vengono sostituiti, {s} con un sottodominio a, b o c. Vuoto: OpenStreetMap",
+                    "es": "{z}, {x} e {y} se sustituyen, {s} por un subdominio a, b o c. Vacío: OpenStreetMap",
+                    "pl": "{z}, {x} i {y} są zastępowane, {s} subdomeną a, b lub c. Puste: OpenStreetMap",
+                    "uk": "{z}, {x} і {y} замінюються, {s} — піддоменом a, b або c. Порожньо: OpenStreetMap",
+                    "zh-cn": "{z}、{x} 和 {y} 会被替换，{s} 替换为子域名 a、b 或 c。为空时使用 OpenStreetMap"
+                }
+            },
+            "attribution": {
+                "type": "text",
+                "label": {
+                    "en": "Source of the map",
+                    "de": "Quellenangabe der Karte",
+                    "ru": "Источник карты",
+                    "pt": "Fonte do mapa",
+                    "nl": "Bronvermelding van de kaart",
+                    "fr": "Source de la carte",
+                    "it": "Fonte della mappa",
+                    "es": "Fuente del mapa",
+                    "pl": "Źródło mapy",
+                    "uk": "Джерело карти",
+                    "zh-cn": "地图来源"
+                },
+                "help": {
+                    "en": "Shown at the bottom of the map, as the tile server asks for. Empty: © OpenStreetMap contributors",
+                    "de": "Wird unten auf der Karte angezeigt, wie es der Kachelserver verlangt. Leer: © OpenStreetMap-Mitwirkende",
+                    "ru": "Показывается внизу карты, как требует сервер тайлов. Пусто: © участники OpenStreetMap",
+                    "pt": "Mostrado na parte inferior do mapa, como o servidor de mosaicos exige. Vazio: © contribuidores do OpenStreetMap",
+                    "nl": "Wordt onderaan de kaart getoond, zoals de tegelserver vraagt. Leeg: © OpenStreetMap-bijdragers",
+                    "fr": "Affichée en bas de la carte, comme l'exige le serveur de tuiles. Vide : © contributeurs d'OpenStreetMap",
+                    "it": "Mostrata in fondo alla mappa, come richiesto dal server dei tasselli. Vuoto: © contributori di OpenStreetMap",
+                    "es": "Se muestra en la parte inferior del mapa, como exige el servidor de teselas. Vacío: © colaboradores de OpenStreetMap",
+                    "pl": "Wyświetlane na dole mapy, zgodnie z wymaganiami serwera kafelków. Puste: © współtwórcy OpenStreetMap",
+                    "uk": "Показується внизу карти, як вимагає сервер тайлів. Порожньо: © учасники OpenStreetMap",
+                    "zh-cn": "按瓦片服务器的要求显示在地图底部。为空时显示 © OpenStreetMap 贡献者"
+                }
+            }
+        }
+    }
+}
