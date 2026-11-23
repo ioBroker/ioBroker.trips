@@ -15,7 +15,14 @@ import {
     type SummaryStop,
     type TripSummary,
 } from './lib/summary';
-import { TripDetector, type DetectorState, type FinishedTrip, type Fix, type TrackPoint } from './lib/tripDetector';
+import {
+    TripDetector,
+    type ActiveTrip,
+    type DetectorState,
+    type FinishedTrip,
+    type Fix,
+    type TrackPoint,
+} from './lib/tripDetector';
 import { toGeoJson, toGpx } from './lib/export';
 
 /** Time based decisions (trip end, live duration) */
@@ -683,6 +690,45 @@ export class TripsAdapter extends Adapter {
         return summary;
     }
 
+    /** Summary of the running trip, without addresses and consumption */
+    private currentSummary(rt: ObjectRuntime, trip: ActiveTrip): TripSummary {
+        const live = rt.detector.live(Date.now());
+        const first = trip.points[0];
+        const last = trip.points[trip.points.length - 1];
+        const coordinate = (point: TrackPoint | undefined, key: 'lat' | 'lon'): number | null =>
+            point && !isPrivate(this.places, point.lat, point.lon) ? round(point[key], 6) : null;
+        const stopped = trip.stops.reduce((sum, stop) => sum + (stop.end - stop.start), 0);
+        return {
+            id: 'current',
+            object: rt.config.name,
+            start: trip.start,
+            end: trip.last,
+            duration: Math.round(live.duration / 1000),
+            movingTime: Math.round(Math.max(0, live.duration - stopped) / 1000),
+            distance: Math.round(trip.distance),
+            avgSpeed: round(live.avgSpeed, 2),
+            maxSpeed: round(trip.maxSpeed, 2),
+            startLat: coordinate(first, 'lat'),
+            startLon: coordinate(first, 'lon'),
+            endLat: coordinate(last, 'lat'),
+            endLon: coordinate(last, 'lon'),
+            stops: trip.stops.map(stop => {
+                const privateStop = !!isPrivate(this.places, stop.lat, stop.lon);
+                return {
+                    start: stop.start,
+                    end: stop.end,
+                    lat: privateStop ? null : round(stop.lat, 6),
+                    lon: privateStop ? null : round(stop.lon, 6),
+                    place: findPlace(this.places, stop.lat, stop.lon)?.name,
+                };
+            }),
+            gaps: trip.gaps,
+            points: trip.points.length,
+            reason: trip.reason,
+            track: false,
+        };
+    }
+
     /** The points that may be stored: without the privacy zones, simplified */
     private storablePoints(points: TrackPoint[]): TrackPoint[] {
         const result: (TrackPoint & { keep?: boolean })[] = [];
@@ -910,16 +956,54 @@ export class TripsAdapter extends Adapter {
                 return list;
             }
 
+            case 'getObjects':
+                // for widgets: the state prefix and the units of each object
+                return Object.values(this.runtimes).map(rt => ({
+                    name: rt.config.name,
+                    id: rt.id,
+                    type: rt.settings.type,
+                    distanceUnit: rt.settings.unit,
+                    speedUnit: rt.settings.speedUnit,
+                    consumptionUnit:
+                        rt.config.consumptionMode && rt.config.consumptionMode !== 'none'
+                            ? rt.config.consumptionUnit || 'l'
+                            : null,
+                    currency: this.config.currency || '€',
+                    active: !!rt.detector.trip,
+                }));
+
             case 'getTrack': {
                 const rt = this.findRuntime(msg.object);
-                const trip = rt?.trips.find(t => t.id === msg.id);
-                if (!rt || !trip) {
+                if (!rt) {
+                    return { error: `Unknown object "${msg.object}"` };
+                }
+                const format = msg.format === 'gpx' ? 'gpx' : 'geojson';
+                if (msg.id === 'current') {
+                    // the running trip so far, without the privacy zones
+                    const active = rt.detector.trip;
+                    if (!active) {
+                        return { error: 'No active trip' };
+                    }
+                    const summary = this.currentSummary(rt, active);
+                    const points = this.storablePoints(active.points);
+                    return {
+                        result:
+                            format === 'gpx'
+                                ? toGpx(
+                                      summary,
+                                      points,
+                                      `${rt.config.name} ${new Date(summary.start).toLocaleString()}`,
+                                  )
+                                : toGeoJson(summary, points),
+                    };
+                }
+                const trip = rt.trips.find(t => t.id === msg.id);
+                if (!trip) {
                     return { error: 'Unknown trip' };
                 }
                 if (!trip.track) {
                     return { error: 'The track was not stored or was deleted' };
                 }
-                const format = msg.format === 'gpx' ? 'gpx' : 'geojson';
                 const text = await this.store.readText(TripStore.trackPath(rt.id, trip, format));
                 return text ? { result: text } : { error: 'Track file not found' };
             }
